@@ -1,0 +1,40 @@
+{
+  "name": "@tambre/cli",
+  "version": "0.0.1",
+  "description": "Sound packs for AI coding agents. Namespace reserved — the CLI is not implemented yet; see the spec and design library at github.com/nemo/tambre.",
+  "keywords": [
+    "sound",
+    "audio",
+    "hooks",
+    "sonification",
+    "ai-agent",
+    "claude-code",
+    "codex",
+    "cursor"
+  ],
+  "author": "nemo",
+  "license": "MIT",
+  "homepage": "https://nemo.github.io/tambre/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nemo/tambre.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/nemo/tambre/issues"
+  },
+  "bin": {
+    "tambre": "bin/tambre.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -136,8 +136,14 @@ Two interaction findings generalised across every variant:
 ## Status
 
 `spec/tambre-spec.md` is v0.1 and unimplemented — there is no CLI, no registry
-server, and no published package. This repository is the specification and a
+server, and no published pack. This repository is the specification and a
 design exploration of its browse surface.
+
+The npm namespace **`@tambre`** is claimed, and [`cli/`](cli/) holds a
+placeholder `@tambre/cli` that reports project status and installs nothing.
+Bare `tambre` is not obtainable — npm blocks it as too similar to the existing
+package `table` — so the CLI is scoped, though its `bin` is still named
+`tambre`. See §0 of the spec for the details.
 
 What the install line does (see [Installing a pack](#installing-a-pack)): the
 agent renders the pack's `sdsl` sounds to WAV with the same renderer the

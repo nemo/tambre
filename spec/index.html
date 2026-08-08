@@ -17,6 +17,8 @@
 <hr>
 <h2>0. Naming</h2>
 <p><code>Tambre</code> is the placeholder — the film craft of performing everyday sound effects in sync with picture, which is exactly what this does for an agent. It's short, available-ish as a concept, and reads well as a verb (<code>tambre install</code>, <code>tambre.dev</code>). Swap it if you have something better; the string appears in the CLI name, the manifest <code>spec</code> URL, and the env var prefix, and nowhere else that matters. Alternatives considered: Timbre, Chime, Hookfire, Audible.</p>
+<p><strong>npm, settled 2026-08-08.</strong> "Available-ish" turned out to be optimistic. Bare <code>tambre</code> is <em>not</em> obtainable — the registry rejects it with <code>403 Forbidden: package name too similar to existing package table</code>. That is npm's automated similarity filter, it fires only at publish time (a <code>--dry-run</code> passes), and it is not appealable. Note the collision is <code>table</code>, not <code>timbre</code>; the filter is looser than the documented punctuation-and-case rule, so do not assume any bare name is safe until a real publish succeeds.</p>
+<p>Scoped packages are exempt from that filter, so the <strong><code>@tambre</code> org</strong> was claimed and the CLI ships as <strong><code>@tambre/cli</code></strong>. The <code>bin</code> is still named <code>tambre</code>, so §11's command list reads unchanged once installed — only the npx form differs (<code>npx @tambre/cli …</code>). <code>@tambre/core</code>, <code>@tambre/sdsl</code>, and <code>@tambre/adapters</code> are available under the same org if M1's <code>core</code>/CLI split wants them.</p>
 <hr>
 <h2>1. What this is</h2>
 <p>A package registry for <strong>sound packs that bind to AI coding agent lifecycle events</strong>. Publish a pack once; it works on Claude Code, Codex CLI, and Cursor.</p>
@@ -282,7 +284,7 @@ tambre scope attest @handle --github &lt;user&gt;     # or --domain
 tambre publish [path] [--tag next]
 tambre yank @scope/name@version --reason "…"</code></pre>
 <p><code>install --agent all</code> is the common case and should be the thing the docs lead with. It must print a per-agent result table including anything it could not do automatically (Codex trust, above).</p>
-<p>Ship as a single npm package with a <code>bin</code>, plus a <code>curl | sh</code> installer that fetches a prebuilt binary. Agents will mostly invoke <code>npx tambre …</code>.</p>
+<p>Ship as a single npm package with a <code>bin</code> — <code>@tambre/cli</code>, whose <code>bin</code> is named <code>tambre</code> so the commands above read as written once installed — plus a <code>curl | sh</code> installer that fetches a prebuilt binary. Agents will mostly invoke <code>npx @tambre/cli …</code>. See §0 for why the package is scoped.</p>
 <hr>
 <h2>12. Web app</h2>
 <p>Read-only, minimalist, Pinterest-shaped. Four routes.</p>

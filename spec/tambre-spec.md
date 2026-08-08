@@ -15,6 +15,21 @@ available-ish as a concept, and reads well as a verb (`tambre install`,
 CLI name, the manifest `spec` URL, and the env var prefix, and nowhere else that
 matters. Alternatives considered: Timbre, Chime, Hookfire, Audible.
 
+**npm, settled 2026-08-08.** "Available-ish" turned out to be optimistic. Bare
+`tambre` is *not* obtainable — the registry rejects it with `403 Forbidden:
+package name too similar to existing package table`. That is npm's automated
+similarity filter, it fires only at publish time (a `--dry-run` passes), and it
+is not appealable. Note the collision is `table`, not `timbre`; the filter is
+looser than the documented punctuation-and-case rule, so do not assume any bare
+name is safe until a real publish succeeds.
+
+Scoped packages are exempt from that filter, so the **`@tambre` org** was
+claimed and the CLI ships as **`@tambre/cli`**. The `bin` is still named
+`tambre`, so §11's command list reads unchanged once installed — only the npx
+form differs (`npx @tambre/cli …`). `@tambre/core`, `@tambre/sdsl`, and
+`@tambre/adapters` are available under the same org if M1's `core`/CLI split
+wants them.
+
 ---
 
 ## 1. What this is
@@ -649,8 +664,10 @@ tambre yank @scope/name@version --reason "…"
 with. It must print a per-agent result table including anything it could not do
 automatically (Codex trust, above).
 
-Ship as a single npm package with a `bin`, plus a `curl | sh` installer that
-fetches a prebuilt binary. Agents will mostly invoke `npx tambre …`.
+Ship as a single npm package with a `bin` — `@tambre/cli`, whose `bin` is named
+`tambre` so the commands above read as written once installed — plus a
+`curl | sh` installer that fetches a prebuilt binary. Agents will mostly invoke
+`npx @tambre/cli …`. See §0 for why the package is scoped.
 
 ---
 
