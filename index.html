@@ -36,6 +36,21 @@
   <p class="meta">7 variants · 1 spec · ~500 KB total · no build step · no dependencies</p>
 </div>
 
+<div class="install">
+  <h2>Install a pack</h2>
+  <p class="sub">
+    There's no <code>tambre</code> CLI yet, so installing a pack is agent-driven: copy this
+    line, paste it into Claude Code, and swap in the pack's own <code>@scope/name</code> from
+    its card. The agent reads <a href="https://github.com/nemo/tambre/blob/main/INSTALL.md">INSTALL.md</a>
+    and performs the install itself — no server round-trip, nothing to download first.
+  </p>
+  <div class="installrow">
+    <code id="installcmd">Install the Tambre sound pack @scope/name for Claude Code. Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.</code>
+    <button type="button" id="installcopy">Copy</button>
+  </div>
+  <p class="hint" id="installstatus" aria-live="polite"></p>
+</div>
+
 <div class="library">
   <div class="libhead">
     <h2>The variants</h2>
@@ -400,6 +415,76 @@ document.addEventListener('click', function (e) {
     list.forEach(function (el) { host.appendChild(el); });
   }
 });
+</script>
+<script>
+/* ---- install command: copy-to-clipboard, never throws ---- */
+(function () {
+  var codeEl = document.getElementById('installcmd');
+  var btn = document.getElementById('installcopy');
+  var status = document.getElementById('installstatus');
+  var revertTimer = null;
+
+  function announce(msg) {
+    if (!status) return;
+    status.textContent = msg;
+    if (revertTimer) clearTimeout(revertTimer);
+    revertTimer = setTimeout(function () { status.textContent = ''; }, 1400);
+  }
+
+  function selectText(el) {
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) { /* selection can fail in odd embeds; fall through silently */ }
+  }
+
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.left = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { ta.setSelectionRange(0, ta.value.length); } catch (e) {}
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  var COPYKEY = /Mac|iPhone|iPod|iPad/.test(navigator.platform || navigator.userAgent || '')
+    ? '⌘C' : 'Ctrl+C';
+
+  function fellBack() {
+    if (codeEl) selectText(codeEl);
+    announce('Selected — press ' + COPYKEY + '.');
+  }
+
+  function doCopy() {
+    if (!codeEl) return;
+    var text = codeEl.textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { announce('Copied.'); },
+        function () { if (legacyCopy(text)) announce('Copied.'); else fellBack(); }
+      );
+      return;
+    }
+    if (legacyCopy(text)) { announce('Copied.'); return; }
+    fellBack();
+  }
+
+  if (btn) {
+    btn.addEventListener('click', function () {
+      try { doCopy(); } catch (e) { fellBack(); }
+    });
+  }
+})();
 </script>
 </body>
 </html>

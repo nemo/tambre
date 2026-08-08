@@ -670,6 +670,15 @@ and waveforms, the binding map, per-agent coverage detail, README, version
 history, and a copy-ready install command. This is essentially the artifact
 already built for the Claude packs — reuse its layout and its renderer wholesale.
 
+Until the CLI in §11 ships, the copy-ready install command is not
+`tambre install …` — it's an agent prompt: `Install the Tambre sound pack
+@scope/name for Claude Code. Read
+https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.` Pasted
+into Claude Code, that has the agent read `INSTALL.md` and perform §10's steps
+itself against the pack data inline in this repo's variants — a stand-in for
+the CLI, not a substitute for it, and unexercised so far. Swap the pack page's
+copy button over to `tambre install …` the day M1 (§14) ships, not before.
+
 **`/@scope` — the publisher page.** Their packs. That's the collection view.
 
 **`/docs`** — the spec, the DSL reference, adapter notes, publishing guide.

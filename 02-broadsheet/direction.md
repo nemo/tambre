@@ -46,6 +46,13 @@ footnoted index of bound hooks that you audition by running the cursor down it.
    filter would pass 24 of 24 and be furniture.
 6. **Pagination, not infinite scroll.** A broadsheet has pages. The folio reads
    "Catalogue continued on page 2 of 2."
+7. **The install line is a working command now, not a fictional one.** There is
+   no Tambre CLI yet, so the italic `tambre install @scope` line — which never
+   ran anywhere — is gone. In its place, the terms line of every entry prints
+   one copy-pasteable sentence ("Install the Tambre sound pack @scope/name for
+   Claude Code. Read INSTALL.md and follow it.") behind a small **Copy** button,
+   set as running text so it reads as a catalogue's "how to order this," not a
+   code sample bolted on.
 
 ## What works
 
@@ -111,8 +118,16 @@ footnoted index of bound hooks that you audition by running the cursor down it.
   outlined, especially the `·` silent mark. It needs the legend, and nobody
   reads legends.
 - Scope is feed-only: no pack page, no publisher page, no search field, no
-  version history, no README. The install line and license are printed but
-  nothing is copyable with one click.
+  version history, no README.
+- **The install command is long prose set at 11px inside a ~350px column.**
+  "Install the Tambre sound pack @scope/name for Claude Code. Read
+  https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it." runs
+  about 135 characters and wraps to four or five lines under every one of the
+  24 entries — a real slab of new grey below a page that was already dense, and
+  the bare URL is the one string here that cannot break at a sensible point, so
+  it splits wherever `overflow-wrap` decides. A real catalogue would set this
+  once as a footnote and refer to it by mark, not repeat the full sentence
+  under every listing.
 
 ## Burned for future variants
 
@@ -173,6 +188,17 @@ footnoted index of bound hooks that you audition by running the cursor down it.
   (`@veilliard/compendium`), a 2-sound pack (`@scholia/marginalia`), two 6-sound
   packs (`@veilliard/compendium`, `@stitch/bindery`), and `@recto/quill` scoring
   **Cursor 5/5 vs Claude Code 4/5** by binding `file.edit`.
+- **The install/copy control, re-verified after adding it:** one `<button
+  class="copy-btn">` per entry (12/12 on a rendered page), each carrying its
+  pack's exact payload string verbatim, and the fake `tambre install …` line no
+  longer appears anywhere in the file. In jsdom, with `navigator.clipboard`
+  stubbed away: the `execCommand` fallback fires, the button reads "Copied" and
+  reverts to "Copy" after 1.4 s, the payload's `<i>` flips to roman and back,
+  and the `aria-live="polite"` region receives the announcement. With
+  `execCommand` also removed, the button falls through to "Press ⌘C" and the
+  payload text is genuinely selected (`window.getSelection()` non-empty).
+  Clicking Copy starts zero `AudioContext`s and zero voices, both cold and
+  after the press is inked.
 
 **Not checked — stated plainly:**
 
@@ -191,6 +217,12 @@ footnoted index of bound hooks that you audition by running the cursor down it.
 - Real `AudioContext` behaviour — `createBuffer`/`start` timing, `onended`
   firing, and whether the polyphony bookkeeping stays correct under real
   asynchronous ends — was exercised only against a stub.
+- **Real Clipboard API / `execCommand` behaviour was not exercised.** jsdom
+  implements neither, so the copy control was verified against stubs of both,
+  not against an actual browser's permission prompts, secure-context rules, or
+  `file://` quirks. Whether Chrome or Safari actually reaches the
+  `execCommand` fallback (rather than the Clipboard API silently failing) when
+  this file is double-clicked from disk is reasoned about, not observed.
 - No accessibility audit beyond `aria-pressed`/`aria-current`/`aria-label` and
   focus-visible rules; no screen reader, no contrast measurement (the greys
   `#7c7566` on `#f4f1ea` at 11px are the likeliest failure).

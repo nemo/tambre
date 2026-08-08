@@ -224,6 +224,11 @@ select{
 .tip .dim{color:#9db0bd}
 .tip .no{color:#e2a08a}
 
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+
 /* ---------- detail panels ---------- */
 .details{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 .pk{background:var(--panel);border:1px solid var(--line);padding:12px}
@@ -271,10 +276,34 @@ canvas.wfbig{display:block;width:100%;height:26px}
 .sup{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--ink3);text-align:center}
 .sup b{color:var(--A);font-weight:600}
 .sup i{color:var(--ink3);font-style:normal}
-.install{
-  font-family:var(--mono);font-size:10.5px;background:var(--panel3);border:1px solid var(--line);
-  padding:5px 7px;margin-top:9px;color:var(--ink2);overflow-x:auto;white-space:nowrap;
+/* ---------- install (copy-paste payload for the agent) ---------- */
+.installer{margin-top:9px;background:var(--panel3);border:1px solid var(--line)}
+.installer.A{border-left:2px solid var(--A)}
+.installer.B{border-left:2px solid var(--B)}
+.installer-top{
+  display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:6px 7px 0;
 }
+.installer-scope{font-family:var(--mono);font-size:10px;color:var(--ink2)}
+.installer-cmd{
+  font-family:var(--mono);font-size:10.5px;color:var(--ink);line-height:1.5;
+  padding:5px 7px;white-space:normal;word-break:break-all;-webkit-user-select:text;user-select:text;
+}
+.installer-row{display:flex;align-items:center;gap:8px;padding:0 7px 7px;flex-wrap:wrap}
+.installer-copy{font-family:var(--mono);font-size:10.5px;padding:3px 9px}
+.installer-copy.copied{background:var(--ink);border-color:var(--ink);color:#fff}
+.installer-reset{font-family:var(--mono);font-size:10px;padding:2px 7px;color:var(--ink2)}
+.installer-reset[hidden]{display:none}
+.installer-note{font-size:10.5px;color:var(--ink3)}
+.installer-copy:focus-visible,.installer-reset:focus-visible,button.rowbind:focus-visible{
+  outline:2px solid var(--ink);outline-offset:1px;
+}
+td.cpc{width:24px;text-align:center;padding:2px 0}
+button.rowbind{
+  font-family:var(--mono);font-size:10px;line-height:1;padding:1px 4px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--ink2);border-radius:2px;cursor:pointer;
+}
+button.rowbind:hover{background:var(--panel3)}
+button.rowbind.copied{background:var(--ink);border-color:var(--ink);color:#fff}
 .hint{font-size:11px;color:var(--ink3);margin-top:6px}
 
 /* ---------- chooser ---------- */
@@ -494,6 +523,7 @@ footer code{font-family:var(--mono);font-size:11px;color:var(--ink2)}
 
 </div>
 <div class="tip hidden" id="tip"></div>
+<div class="sr-only" id="live" aria-live="polite"></div>
 
 <script>
 "use strict";
@@ -1473,6 +1503,77 @@ function el(tag,cls,txt){
   if(txt!==undefined&&txt!==null)e.textContent=txt;
   return e;
 }
+
+/* ============================================================
+   INSTALL PAYLOAD + CLIPBOARD
+   There is no CLI and no registry server yet. What ships instead is a
+   natural-language command the user pastes into Claude Code, which points
+   at this repo's INSTALL.md so the agent performs the install itself.
+   ============================================================ */
+function canonicalPayload(pack){
+  return "Install the Tambre sound pack "+pack.name+
+    " for Claude Code. Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.";
+}
+function bindingPayload(pack,ev){
+  return "Install the Tambre sound pack "+pack.name+
+    " for Claude Code, binding only "+ev+
+    ". Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.";
+}
+function announce(msg){
+  const l=$("live");
+  if(l) l.textContent=msg;
+}
+const COPY_KEY=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"")?"⌘C":"Ctrl+C";
+function selectAllText(node){
+  try{
+    if(window.getSelection&&document.createRange){
+      const r=document.createRange();
+      r.selectNodeContents(node);
+      const sel=window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } else if(document.body.createTextRange){
+      const r=document.body.createTextRange();
+      r.moveToElementText(node);
+      r.select();
+    }
+  }catch(e){}
+}
+function legacyCopy(text,done){
+  let ok=false;
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text;
+    ta.setAttribute("readonly","");
+    ta.style.position="fixed";
+    ta.style.top="-1000px";
+    ta.style.left="-1000px";
+    ta.style.opacity="0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try{ta.setSelectionRange(0,text.length);}catch(e2){}
+    ok=!!(document.execCommand&&document.execCommand("copy"));
+    document.body.removeChild(ta);
+  }catch(e){ ok=false; }
+  done(ok);
+}
+/* Never throws. Tries the async clipboard API, falls back to a hidden
+   textarea + execCommand, and reports failure so the caller can fall back
+   to selecting the visible text. file:// pages commonly lack a secure
+   context, so navigator.clipboard is frequently just absent here. */
+function copyPlainText(text,done){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(
+        function(){ done(true); },
+        function(){ legacyCopy(text,done); }
+      );
+      return;
+    }
+  }catch(e){}
+  legacyCopy(text,done);
+}
 function fmtN(n){
   if(n>=1000000) return (n/1000000).toFixed(1)+"M";
   if(n>=1000) return (n/1000).toFixed(n>=10000?0:1)+"k";
@@ -1796,7 +1897,7 @@ function renderDetail(laneId){
   const tbl=el("table","hooks");
   const thead=el("thead");
   const hr=el("tr");
-  ["event","role","sound","gain","thr","×","wave","cc","cx","cu"].forEach(function(h){
+  ["event","role","sound","gain","thr","×","wave","cc","cx","cu","cp"].forEach(function(h){
     hr.appendChild(el("th",null,h));
   });
   thead.appendChild(hr);tbl.appendChild(thead);
@@ -1833,6 +1934,21 @@ function renderDetail(laneId){
       }
       tr.appendChild(td);
     });
+    const tdcp=el("td","cpc");
+    if(b){
+      const cpBtn=el("button","rowbind","⎘");
+      cpBtn.type="button";
+      cpBtn.title="Copy an install command bound only to "+ev;
+      cpBtn.setAttribute("aria-label","Copy install command binding only "+ev+", lane "+laneId);
+      cpBtn.addEventListener("click",function(e){
+        e.stopPropagation();
+        useSingleBinding(ev,cpBtn);
+      });
+      tdcp.appendChild(cpBtn);
+    } else {
+      tdcp.textContent="·";
+    }
+    tr.appendChild(tdcp);
     if(b){
       tr.addEventListener("mouseenter",function(e){
         auditionHook(laneId,ev);
@@ -1853,10 +1969,62 @@ function renderDetail(laneId){
   });
   tbl.appendChild(tb);
   host.appendChild(tbl);
-  const inst=el("div","install","npx tambre install "+p.name+" --agent all");
-  host.appendChild(inst);
+
+  /* ---- install: copy-pasteable payload, canonical or single-binding ---- */
+  let mode="all", modeEv=null;
+  const installer=el("div","installer "+laneId);
+  const itop=el("div","installer-top");
+  itop.appendChild(el("span","tlabel","install"));
+  const scopeLbl=el("span","installer-scope","all bindings");
+  itop.appendChild(scopeLbl);
+  const resetBtn=el("button","installer-reset","use all bindings");
+  resetBtn.type="button";
+  resetBtn.hidden=true;
+  itop.appendChild(resetBtn);
+  installer.appendChild(itop);
+  const cmdEl=el("div","installer-cmd",canonicalPayload(p));
+  installer.appendChild(cmdEl);
+  const irow=el("div","installer-row");
+  const copyBtn=el("button","installer-copy","copy");
+  copyBtn.type="button";
+  irow.appendChild(copyBtn);
+  irow.appendChild(el("span","installer-note","paste into Claude Code"));
+  installer.appendChild(irow);
+  host.appendChild(installer);
+
+  function paint(){
+    scopeLbl.textContent=mode==="single"?"binding only "+modeEv:"all bindings";
+    cmdEl.textContent=mode==="single"?bindingPayload(p,modeEv):canonicalPayload(p);
+    resetBtn.hidden=mode!=="single";
+  }
+  function flash(btn,normal,copiedLabel,ok,evName){
+    if(btn._copyTimer) clearTimeout(btn._copyTimer);
+    btn.textContent=ok?copiedLabel:(normal==="copy"?"press "+COPY_KEY:COPY_KEY);
+    btn.classList.add("copied");
+    if(!ok) selectAllText(cmdEl);
+    announce(ok
+      ? "Copied install command"+(evName?" for "+evName:"")+", lane "+laneId+"."
+      : "Couldn't copy automatically. The install command for lane "+laneId+" is selected — press Cmd+C or Ctrl+C.");
+    btn._copyTimer=setTimeout(function(){
+      btn.classList.remove("copied");
+      btn.textContent=normal;
+    },1400);
+  }
+  copyBtn.addEventListener("click",function(){
+    const text=mode==="single"?bindingPayload(p,modeEv):canonicalPayload(p);
+    copyPlainText(text,function(ok){ flash(copyBtn,"copy","copied",ok,mode==="single"?modeEv:null); });
+  });
+  resetBtn.addEventListener("click",function(){
+    mode="all";modeEv=null;paint();
+  });
+  function useSingleBinding(ev,rowBtn){
+    mode="single";modeEv=ev;paint();
+    copyPlainText(bindingPayload(p,ev),function(ok){ flash(rowBtn,"⎘","✓",ok,ev); });
+  }
+
   host.appendChild(el("div","hint",
-    "● native · ○ fallback only · ✕ unreachable · hover a row to audition that one hook · click to jump to its first occurrence"));
+    "● native · ○ fallback only · ✕ unreachable · hover a row to audition that one hook · "+
+    "click to jump to its first occurrence · ⎘ copies an install command bound only to that hook"));
 }
 
 /* ============================================================

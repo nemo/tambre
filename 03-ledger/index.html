@@ -100,6 +100,19 @@ tr.hook td.ix{color:var(--mut2)}
 tr.hook td.snd,tr.hook td.fb{color:var(--mut)}
 tr.hook:last-child>td{border-bottom:1px solid var(--line)}
 
+/* ---------- pack-level install line (first sub-row of an expansion) ---------- */
+tr.install>td{border-bottom:1px dotted var(--line);white-space:normal}
+tr.install:last-child>td{border-bottom:1px solid var(--line)}
+tr.install td.ix,tr.install td.ex{white-space:nowrap}
+td.inst-cell{padding-top:3px;padding-bottom:3px}
+td.inst-cell .lb{color:var(--mut)}
+td.inst-cell .pay{color:var(--ink)}
+.copybtn{display:inline-block;border:1px solid var(--rule);padding:0 5px;margin-left:8px;color:var(--mut)}
+.copybtn:hover{color:var(--ink);border-color:var(--ink)}
+.copybtn.done{color:var(--sort);border-color:var(--sort)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
 /* ---------- footer status bar ---------- */
 #foot{border-top:1px solid var(--rule);padding:4px 8px;display:flex;gap:0;flex-wrap:wrap;align-items:baseline;background:var(--bg)}
 #foot .grp{border-right:1px solid var(--line)}
@@ -149,6 +162,7 @@ tr.hook:last-child>td{border-bottom:1px solid var(--line)}
   </table>
   <div id="empty" hidden>No rows match. Widen the trust filter or clear the query.</div>
 </div>
+<div id="live" class="sr-only" aria-live="polite"></div>
 
 <div id="foot">
   <span class="grp" id="pg"></span>
@@ -710,6 +724,10 @@ function getPeaks(p,name,bins){
 function primarySound(p){return p.b[p.primary].s;}
 function durMs(p,name){return Math.round(getBuf(p,name).length/SR*1000);}
 
+/* ---------- pack-level install command (§ install affordance) ---------- */
+const INSTALL_TMPL="Install the Tambre sound pack {PKG} for Claude Code. Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.";
+function installPayload(p){return INSTALL_TMPL.replace("{PKG}",p.n);}
+
 /* ============================================================
    4. Audio transport — gesture-gated, polyphony 6, two throttles
    ============================================================ */
@@ -868,6 +886,7 @@ function buildRows(){
   pg.forEach(function(p){
     rows.push({kind:"pack",p:p});
     if(state.expanded[p.id]){
+      rows.push({kind:"install",p:p});
       p.hooks.forEach(function(e,hi){
         rows.push({kind:"hook",p:p,e:e,hi:hi});
       });
@@ -954,6 +973,22 @@ function packRowHtml(p,ordinal,zebra){
     '<td class="'+sc("dur").trim()+'"><canvas data-w="'+wk+'" width="88" height="13"></canvas></td>'+
     "</tr>";
 }
+/* pack-level, not per-hook: the copy control lives once per expanded pack,
+   as the first sub-row of its block — a table full of these would drown
+   the ledger, one line does not. */
+function installRowHtml(p){
+  const payload=installPayload(p);
+  return '<tr class="install" data-p="'+p.id+'">'+
+    '<td class="ix"></td>'+
+    '<td class="ex"></td>'+
+    '<td class="inst-cell" colspan="15">'+
+      '<span class="lb">install&nbsp;&rarr;</span> '+
+      '<span class="pay">'+esc(payload)+'</span>'+
+      '<button type="button" class="copybtn" data-act="copy" data-p="'+p.id+
+        '" aria-label="copy install command for '+esc(p.n)+'">copy</button>'+
+    "</td>"+
+    "</tr>";
+}
 function hookRowHtml(p,event,hi){
   const bind=p.b[event],role=ROLE[event]||"cue";
   const g=(bind.g!==undefined?bind.g:ROLE_GAIN[role]).toFixed(2);
@@ -1013,6 +1048,7 @@ function render(){
   let zi=0;
   rows.forEach(function(r){
     if(r.kind==="pack"){ord++;html+=packRowHtml(r.p,ord,zi%2===1);zi++;}
+    else if(r.kind==="install")html+=installRowHtml(r.p);
     else html+=hookRowHtml(r.p,r.e,r.hi);
   });
   body.innerHTML=html;
@@ -1083,6 +1119,76 @@ function opts(id,list,cur,key,labels){
 /* ============================================================
    7. Interaction
    ============================================================ */
+/* ---------- copy-to-clipboard for the pack-level install line ---------- */
+const COPY_REVERT_MS=1400;
+const COPY_KEY=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"")?"⌘C":"Ctrl+C";
+function announce(msg){
+  const el=document.getElementById("live");
+  if(el)el.textContent=msg;
+}
+function selectNode(el){
+  if(!el)return;
+  try{
+    const range=document.createRange();
+    range.selectNodeContents(el);
+    const sel=window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){/* selection is a nicety, never fatal */}
+}
+function execCopyFallback(text){
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text;
+    ta.setAttribute("readonly","");
+    ta.style.position="fixed";ta.style.top="-1000px";ta.style.left="-1000px";
+    document.body.appendChild(ta);
+    ta.focus();ta.select();
+    let ok=false;
+    try{ok=document.execCommand("copy");}catch(e){ok=false;}
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){return false;}
+}
+function copyToClipboard(text){
+  return new Promise(function(resolve){
+    try{
+      if(navigator&&navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(
+          function(){resolve(true);},
+          function(){resolve(execCopyFallback(text));}
+        );
+        return;
+      }
+    }catch(e){/* fall through to the textarea path */}
+    resolve(execCopyFallback(text));
+  });
+}
+function handleCopyClick(btn){
+  try{
+    const pid=+btn.getAttribute("data-p"),p=P[pid];
+    if(!p)return;
+    const text=installPayload(p);
+    const paySpan=btn.parentElement&&btn.parentElement.querySelector(".pay");
+    if(btn._revert)clearTimeout(btn._revert);
+    copyToClipboard(text).then(function(ok){
+      if(ok){
+        btn.textContent="copied";
+        btn.classList.add("done");
+        announce("copied install command for "+p.n);
+      }else{
+        selectNode(paySpan);
+        btn.textContent="press "+COPY_KEY;
+        btn.classList.remove("done");
+        announce("copy failed — text selected, press "+COPY_KEY+" to copy");
+      }
+      btn._revert=setTimeout(function(){
+        btn.textContent="copy";btn.classList.remove("done");
+      },COPY_REVERT_MS);
+    });
+  }catch(e){/* the control must never throw */}
+}
+
 function rowAt(i){return rows[i];}
 function playRow(i,fromHover){
   const r=rowAt(i);
@@ -1151,12 +1257,20 @@ function init(){
     const i=Array.prototype.indexOf.call(body.children,tr);
     if(i<0)return;
     state.cursor=i;paintCursor();
+    const r=rowAt(i);
+    if(r&&r.kind==="install")return;   /* the install line is not a sound to audition */
     playRow(i,true);
   });
   body.addEventListener("mouseleave",function(){lastTr=null;});
   body.addEventListener("click",function(e){
     const tr=e.target.closest?e.target.closest("tr"):null;
     if(!tr)return;
+    const copyBtn=e.target.closest?e.target.closest(".copybtn"):null;
+    if(copyBtn){
+      e.stopPropagation();
+      handleCopyClick(copyBtn);
+      return;   /* never falls through to arm()/playRow — copying is silent */
+    }
     const armedNow=arm();
     const i=Array.prototype.indexOf.call(body.children,tr);
     const act=e.target.getAttribute&&e.target.getAttribute("data-act");
@@ -1197,7 +1311,7 @@ function init(){
     if(k==="ArrowLeft"){
       e.preventDefault();
       const r=rowAt(state.cursor);if(!r)return;
-      if(r.kind==="hook"){
+      if(r.kind==="hook"||r.kind==="install"){
         state.cursor=indexOfPackRow(r.p.id);paintCursor();
       }else if(state.expanded[r.p.id]){
         delete state.expanded[r.p.id];render();

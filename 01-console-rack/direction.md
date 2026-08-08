@@ -60,6 +60,18 @@ the pads plays the pack as a phrase, because the sounds are relatives.
 
 Accordion, not multi-expand — one open channel keeps the rack scannable.
 
+**Install is a jack, not a button.** There's no CLI yet, so "install" means
+copying a sentence an agent can read. The patch bay gets an `Install` line
+(label, the sentence in monospace, a `Copy` button) that defaults to the
+whole-pack command; each pad also gets a tiny LED-ringed jack in its corner
+that overwrites that line with the single-binding form for just that hook
+and copies it immediately — reusing the same jack visual the LEDs already
+use, so it reads as part of the desk. Clipboard failures fall back to
+`execCommand`, and if that fails too the sentence gets selected on screen
+with a "press ⌘C" prompt — the line is always visible and selectable, so a
+clipboard failure is never a dead end. Copy confirmation is a 1.4s amber LED
+flash plus an `aria-live` announcement, nothing louder.
+
 Auditioning churn pads is deliberately quiet: gain 0.2 per §10.3. The pad prints
 `×0.20` so near-silence reads as information rather than a bug.
 
@@ -95,6 +107,17 @@ Auditioning churn pads is deliberately quiet: gain 0.2 per §10.3. The pad print
   hovering its pads plays specific hooks. Moving from strip to pad crosses both.
   The shared 110ms gate keeps it from machine-gunning, but the model is not
   self-evident.
+- **The per-hook jack is discoverable only by hovering a pad or reading the
+  legend.** It sits at 45% opacity until hover/focus, on purpose (16 more
+  full-strength LEDs per open channel would be noise), but that means a user
+  who never hovers a pad will never find the single-binding install path —
+  the same "buried affordance" problem as the patch bay itself, one level
+  down.
+- `navigator.clipboard.writeText` is unreliable from `file://` depending on
+  browser and embedding context, which is exactly why every copy control
+  falls back to `execCommand` and then to on-screen text selection — but
+  that three-tier fallback is untested against a real browser's clipboard
+  permission prompts, only against stubbed failures in jsdom.
 
 ## Burned for future variants
 
@@ -113,5 +136,14 @@ motion-forward.
 - DOM exercised in jsdom with stubbed Web Audio + canvas: render, filters, sort,
   paging, power-on, solo sequence, polyphony cap, hover throttle. Zero console
   errors.
+- Install controls exercised in jsdom: pack-level `Copy` and a per-hook jack
+  both write the exact canonical/single-binding sentence to a stubbed
+  clipboard, neither starts a voice (checked via a stubbed `AudioBufferSourceNode.start`),
+  the 1.4s revert fires, and the three-tier fallback (clipboard API fails →
+  `execCommand` fails → text gets selected, label reads "Press Ctrl+C") was
+  forced and confirmed. Zero console errors.
 - **Not verified:** visual layout and paint. Chrome MCP refuses `file://` and the
   sandbox lacks the libraries for a headless browser. Open it to judge the look.
+  In particular, the padjack's 45%-opacity resting state and the 14px hit
+  target have not been checked against a real pointer — only that the DOM
+  and event wiring are correct.

@@ -221,8 +221,9 @@ h1#title{
 #cardfoot{
   margin-top:auto;padding-top:14px;
   border-top:1px solid color-mix(in srgb,var(--ink) 24%,transparent);
-  display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap;
+  display:flex;flex-direction:column;gap:16px;
 }
+.footrow{display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap}
 .stats{display:flex;gap:22px;flex-wrap:wrap}
 .stat{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.66}
 .stat b{
@@ -247,16 +248,45 @@ h1#title{
   padding:3px 6px;border-radius:2px;
   border:1px solid color-mix(in srgb,var(--ink) 26%,transparent);opacity:.85;
 }
-#install{
-  display:flex;align-items:center;gap:8px;margin-left:auto;
-  font-family:var(--mono);font-size:11px;
-  padding:7px 9px;border-radius:3px;
-  background:color-mix(in srgb,var(--ink) 10%,transparent);
-  border:1px solid color-mix(in srgb,var(--ink) 26%,transparent);
+/* ---- install dock: paste-into-Claude-Code affordance, one row per scope ---- */
+#install{display:flex;flex-direction:column;gap:10px}
+.installrow{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:10px 14px;border-radius:4px;
+  background:color-mix(in srgb,var(--ink) 8%,transparent);
+  border:1px solid color-mix(in srgb,var(--ink) 22%,transparent);
 }
-#copybtn{
-  font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
-  cursor:pointer;background:var(--ink);color:var(--bg);border:0;border-radius:2px;padding:4px 7px;font-weight:700;
+.il-head{display:flex;flex-direction:column;gap:2px;flex:0 0 auto;min-width:150px}
+.il-label{
+  font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:700;opacity:.92;
+}
+.il-label b{color:var(--hot);font-weight:700}
+.il-sub{font-family:var(--mono);font-size:9px;letter-spacing:.06em;opacity:.56}
+.il-cmdwrap{flex:1 1 320px;display:flex;align-items:center;gap:10px;min-width:0}
+.il-cmd{
+  flex:1 1 auto;min-width:0;display:block;
+  font-family:var(--mono);font-size:12.5px;line-height:1.5;
+  padding:8px 10px;border-radius:3px;
+  background:color-mix(in srgb,var(--bg2) 55%,transparent);
+  border:1px solid color-mix(in srgb,var(--ink) 20%,transparent);
+  color:var(--ink);white-space:normal;word-break:break-word;
+  user-select:text;cursor:text;
+}
+.copybtn{
+  flex:0 0 auto;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  cursor:pointer;background:var(--hot);color:var(--onhot);border:0;border-radius:3px;
+  padding:9px 14px;font-weight:700;
+  transition:transform .15s var(--ease),background-color .15s var(--ease),color .15s var(--ease);
+}
+.copybtn:hover{opacity:.86}
+.copybtn:active{transform:scale(.96)}
+.copybtn:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
+.copybtn.copied{background:var(--ink);color:var(--bg);transform:scale(1.04)}
+.copybtn.failed{background:transparent;color:var(--ink);border:1px dashed color-mix(in srgb,var(--ink) 55%,transparent)}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;
 }
 
 /* ---------------- nav ---------------- */
@@ -365,6 +395,9 @@ h1#title{
   .hook{flex:1 1 44%;max-width:none}
   #foot{padding:6px 14px 10px}
   .nav{width:34px;height:56px}
+  .installrow{padding:8px 10px;gap:10px}
+  .il-head{min-width:100%}
+  .il-cmd{font-size:11.5px}
 }
 </style>
 </head>
@@ -402,6 +435,8 @@ h1#title{
     <div id="pos"></div>
     <div id="scrub" role="group" aria-label="Deck position scrubber"></div>
   </footer>
+
+  <div id="copyLive" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <section id="sheet" hidden aria-label="Deck index">
     <div id="sheethead">
@@ -1136,6 +1171,89 @@ function dateLabel(iso){
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
+/* ---------------- install payloads + clipboard ----------------
+   There is no Tambre CLI yet — the spec is v0.1 and unimplemented. What works
+   today is a natural-language instruction the user pastes into Claude Code,
+   which reads this repo's INSTALL.md and performs the install itself. Exact
+   wording matters: it's the thing that gets pasted verbatim. */
+function payloadPack(p){
+  return "Install the Tambre sound pack "+p.id+" for Claude Code. "+
+    "Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.";
+}
+function payloadHook(p,ev){
+  return "Install the Tambre sound pack "+p.id+" for Claude Code, binding only "+ev+". "+
+    "Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.";
+}
+function announceCopy(msg){
+  const live=document.getElementById("copyLive");
+  if(live) live.textContent=msg;
+}
+function selectNode(el){
+  try{
+    const range=document.createRange();
+    range.selectNodeContents(el);
+    const sel=window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){}
+}
+/* file:// has no navigator.clipboard in some browsers, and execCommand is
+   deprecated-but-alive everywhere it matters. Never throws either way. */
+function fallbackCopy(text){
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text;
+    ta.setAttribute("readonly","");
+    ta.style.position="fixed";
+    ta.style.opacity="0";
+    ta.style.top="0";
+    ta.style.left="0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0,text.length);
+    let ok=false;
+    try{ ok=document.execCommand("copy"); }catch(e){ ok=false; }
+    document.body.removeChild(ta);
+    return ok;
+  }catch(e){ return false; }
+}
+function setCopyState(btn,cls,label,ms){
+  if(!btn)return;
+  if(btn._defaultLabel===undefined) btn._defaultLabel=btn.textContent;
+  clearTimeout(btn._resetT);
+  btn.classList.remove("copied","failed");
+  if(cls) btn.classList.add(cls);
+  btn.textContent=label;
+  btn._resetT=setTimeout(function(){
+    btn.classList.remove("copied","failed");
+    btn.textContent=btn._defaultLabel||"copy";
+  },ms);
+}
+const COPY_KEY=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"")?"⌘C":"Ctrl+C";
+function copyInstall(btn,text,codeEl){
+  if(!btn)return;
+  let settled=false;
+  function settle(ok){
+    if(settled)return; settled=true;
+    if(ok){
+      setCopyState(btn,"copied","copied",1400);
+      announceCopy("Install command copied to clipboard.");
+    }else{
+      if(codeEl) selectNode(codeEl);
+      setCopyState(btn,"failed","press "+COPY_KEY,2600);
+      announceCopy("Couldn't copy automatically — the command is selected, press Command C or Control C to copy it.");
+    }
+  }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){settle(true);},function(){settle(fallbackCopy(text));});
+      return;
+    }
+  }catch(e){}
+  settle(fallbackCopy(text));
+}
+
 function render(animateIn){
   const p=deck[idx];
   if(!p)return;
@@ -1169,18 +1287,36 @@ function render(animateIn){
       '<span>sweep across &middot; each hook has its own sound &middot; '+p.boundEvents.length+' bindings, '+p.sc+' sounds</span></div>'+
     '<div id="organ" role="group" aria-label="Bound hooks"></div>'+
     '<div id="cardfoot">'+
-      '<div>'+
-        '<div class="stats">'+
-          '<div class="stat">sounds<b>'+p.sc+'</b></div>'+
-          '<div class="stat">bindings<b>'+p.boundEvents.length+'</b></div>'+
-          '<div class="stat">installs<b>'+fmt(p.ins)+'</b></div>'+
-          '<div class="stat">plays<b>'+fmt(p.pl)+'</b></div>'+
+      '<div class="footrow">'+
+        '<div>'+
+          '<div class="stats">'+
+            '<div class="stat">sounds<b>'+p.sc+'</b></div>'+
+            '<div class="stat">bindings<b>'+p.boundEvents.length+'</b></div>'+
+            '<div class="stat">installs<b>'+fmt(p.ins)+'</b></div>'+
+            '<div class="stat">plays<b>'+fmt(p.pl)+'</b></div>'+
+          '</div>'+
+          '<div class="tags">'+p.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>'+
         '</div>'+
-        '<div class="tags">'+p.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>'+
+        '<div class="cov">'+covCells+'</div>'+
       '</div>'+
-      '<div class="cov">'+covCells+'</div>'+
-      '<div id="install"><code id="cmd">npx tambre install '+esc(p.id)+' --agent all</code>'+
-        '<button id="copybtn">copy</button></div>'+
+      '<div id="install">'+
+        '<div class="installrow" id="install-pack">'+
+          '<div class="il-head"><span class="il-label">install this pack</span>'+
+            '<span class="il-sub">paste into Claude Code</span></div>'+
+          '<div class="il-cmdwrap">'+
+            '<code id="cmd" class="il-cmd">'+esc(payloadPack(p))+'</code>'+
+            '<button type="button" class="copybtn" id="copyPack" aria-label="Copy install command for the whole pack">copy</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="installrow" id="install-hook">'+
+          '<div class="il-head"><span class="il-label">install <b id="hookEvLabel">'+esc(p.primary)+'</b> only</span>'+
+            '<span class="il-sub">the hook you’re auditioning</span></div>'+
+          '<div class="il-cmdwrap">'+
+            '<code id="cmdHook" class="il-cmd">'+esc(payloadHook(p,p.primary))+'</code>'+
+            '<button type="button" class="copybtn" id="copyHook" aria-label="Copy install command for '+esc(p.primary)+' only">copy</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
     '</div>';
 
   if(animateIn && !REDUCED){
@@ -1195,13 +1331,17 @@ function render(animateIn){
   paintPos();
   paintScrub();
 
-  const cp=document.getElementById("copybtn");
-  if(cp) cp.addEventListener("click",function(ev){
+  const cmdEl=document.getElementById("cmd");
+  const copyPackBtn=document.getElementById("copyPack");
+  if(copyPackBtn) copyPackBtn.addEventListener("click",function(ev){
     ev.stopPropagation();
-    const cmd=document.getElementById("cmd").textContent;
-    try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(cmd); }catch(e){}
-    cp.textContent="copied";
-    setTimeout(function(){cp.textContent="copy";},1200);
+    copyInstall(copyPackBtn,payloadPack(p),cmdEl);
+  });
+  const copyHookBtn=document.getElementById("copyHook");
+  if(copyHookBtn) copyHookBtn.addEventListener("click",function(ev){
+    ev.stopPropagation();
+    const hookEv=focusEv||p.primary;
+    copyInstall(copyHookBtn,payloadHook(p,hookEv),document.getElementById("cmdHook"));
   });
 }
 
@@ -1293,6 +1433,18 @@ function paintHero(){
     ' &nbsp;role '+b.role+' &nbsp;gain '+b.gain.toFixed(2)+
     (b.throttle?" &nbsp;throttle "+b.throttle+"ms":" &nbsp;no throttle")+
     ' &nbsp;'+ms+' ms';
+
+  /* the single-binding install line always mirrors whichever hook is
+     currently focused/auditioned, same as the hero waveform above it */
+  const hookLabel=document.getElementById("hookEvLabel");
+  if(hookLabel && hookLabel.textContent!==ev) hookLabel.textContent=ev;
+  const cmdHookEl=document.getElementById("cmdHook");
+  if(cmdHookEl){
+    const hookTxt=payloadHook(p,ev);
+    if(cmdHookEl.textContent!==hookTxt) cmdHookEl.textContent=hookTxt;
+  }
+  const copyHookBtn=document.getElementById("copyHook");
+  if(copyHookBtn) copyHookBtn.setAttribute("aria-label","Copy install command for "+ev+" only");
 
   const dpr=(typeof window!=="undefined"&&window.devicePixelRatio)?window.devicePixelRatio:1;
   const cssW=cv.clientWidth||960, cssH=cv.clientHeight||132;
@@ -1513,7 +1665,7 @@ function wire(){
   /* drag / swipe the top card */
   let down=false, x0=0, moved=0;
   stage.addEventListener("pointerdown",function(e){
-    if(e.target && e.target.closest && e.target.closest(".hook,#copybtn,.nav,.tick")) return;
+    if(e.target && e.target.closest && e.target.closest(".hook,#install,.nav,.tick")) return;
     down=true;x0=e.clientX||0;moved=0;
   });
   stage.addEventListener("pointermove",function(e){

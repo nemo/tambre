@@ -27,6 +27,24 @@ Three pieces:
 Full specification: [`spec/tambre-spec.md`](spec/tambre-spec.md)
 ([rendered](https://nemo.github.io/tambre/spec/)).
 
+## Installing a pack
+
+There is no CLI and no registry server yet, so installing a pack today is
+agent-driven rather than a shell command: copy the install line off any pack
+in the library and paste it into Claude Code. The agent reads
+[`INSTALL.md`](INSTALL.md), finds the pack's data inline in whichever variant
+defined it, renders its sounds, and wires up the hooks itself.
+
+```
+Install the Tambre sound pack @scope/name for Claude Code. Read https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.
+```
+
+Substitute the pack's actual `@scope/name` — each variant shows it on the
+pack's own card. The [library index](index.html) also has a copy button for
+the generic form. See [`INSTALL.md`](INSTALL.md) for what actually happens
+when an agent follows it, including what a hand-driven install can't do yet
+(e.g. throttle enforcement).
+
 ## Why the seven variants
 
 The registry's hard problem is not storage or auth — it is **auditioning**. A
@@ -120,6 +138,16 @@ Two interaction findings generalised across every variant:
 `spec/tambre-spec.md` is v0.1 and unimplemented — there is no CLI, no registry
 server, and no published package. This repository is the specification and a
 design exploration of its browse surface.
+
+What the install line does (see [Installing a pack](#installing-a-pack)): the
+agent renders the pack's `sdsl` sounds to WAV with the same renderer the
+browser uses and adds hook entries to your `~/.claude/settings.json`. The
+procedure in [`INSTALL.md`](INSTALL.md) is written against the spec and the
+variants' own renderer, but **it has not been run end to end** — treat the
+first install as the test. What it does not give you regardless: a registry to
+resolve `@scope/name` over the network, Codex or Cursor adapters, per-binding
+throttle enforcement, or an uninstall command — those still require the CLI in
+§11 of the spec.
 
 The variants were verified programmatically: audio renders without silence, NaN,
 or peaks above −1 dBFS; all six generators are exercised; per-hook hover

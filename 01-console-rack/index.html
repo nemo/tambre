@@ -238,6 +238,50 @@
   .dots i.d{background:var(--amber)}
   .dots i.f{background:var(--amber-dim)}
 
+  /* ---------- install: copy-pasteable command, no CLI exists yet ---------- */
+  .padwrap{position:relative}
+  .padwrap .pad{padding-right:22px}
+  .padjack{
+    position:absolute;top:5px;right:5px;width:14px;height:14px;z-index:2;
+    border:1px solid var(--rule);border-radius:50%;background:var(--panel-hi);
+    display:flex;align-items:center;justify-content:center;opacity:.45;
+    transition:border-color .12s,opacity .12s;
+  }
+  .padjack::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--led-off);transition:background .12s,box-shadow .12s}
+  .padwrap:hover .padjack,.padjack:hover,.padjack:focus-visible,.padjack.copied{opacity:1}
+  .padjack:hover,.padjack:focus-visible{border-color:var(--amber-dim)}
+  .padjack:focus-visible{outline:2px solid var(--amber-dim);outline-offset:2px}
+  .padjack.copied::before{background:var(--amber);box-shadow:0 0 6px rgba(255,171,36,.7)}
+
+  .install{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    margin:0 0 12px;padding:8px 10px;
+    border:1px solid var(--rule-soft);border-radius:2px;background:var(--panel);
+  }
+  .ilabel{
+    font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--ink-3);
+    text-transform:uppercase;flex:none;
+  }
+  .ipayload{
+    font-family:var(--mono);font-size:10.5px;color:var(--ink-2);line-height:1.5;
+    flex:1 1 320px;min-width:0;user-select:text;-webkit-user-select:text;cursor:text;
+  }
+  .icopy{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    border:1px solid var(--rule);border-radius:2px;background:var(--panel-hi);color:var(--ink-2);
+    padding:6px 10px;display:flex;align-items:center;gap:6px;flex:none;
+    transition:border-color .12s,color .12s;
+  }
+  .icopy .iled{width:5px;height:5px;border-radius:50%;background:var(--led-off);flex:none;transition:background .12s,box-shadow .12s}
+  .icopy:hover{color:var(--ink);border-color:var(--amber-dim)}
+  .icopy:focus-visible{color:var(--ink);border-color:var(--amber-dim);outline:2px solid var(--amber-dim);outline-offset:2px}
+  .icopy.copied .iled{background:var(--amber);box-shadow:0 0 6px rgba(255,171,36,.7)}
+
+  .sr-only{
+    position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+    clip:rect(0,0,0,0);white-space:nowrap;border:0;
+  }
+
   .empty{padding:70px 20px;text-align:center;font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.1em}
   .more{padding:22px;text-align:center}
   .more button{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--rule);padding:9px 18px;border-radius:2px}
@@ -334,6 +378,7 @@
   <span style="flex:1"></span>
   <span class="k">CLICK A CHANNEL TO OPEN ITS PATCH BAY · HOVER A PAD TO HEAR THAT HOOK</span>
 </div>
+<div id="liveAnnounce" class="sr-only" role="status" aria-live="polite"></div>
 
 <script>
 /* ============================================================
@@ -902,6 +947,68 @@ function meterLoop(){
 }
 
 /* ============================================================
+   INSTALL — there is no tambre CLI and no registry server yet (spec
+   is v0.1, unimplemented). The control below copies a natural-language
+   command that points an agent at this repo's INSTALL.md and lets the
+   agent do the actual install. Works from file:// and never throws.
+   ============================================================ */
+const INSTALL_URL="https://github.com/nemo/tambre/blob/main/INSTALL.md";
+const IS_MAC=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"");
+function installPayload(pk,ev){
+  return ev
+    ? `Install the Tambre sound pack ${pk} for Claude Code, binding only ${ev}. Read ${INSTALL_URL} and follow it.`
+    : `Install the Tambre sound pack ${pk} for Claude Code. Read ${INSTALL_URL} and follow it.`;
+}
+function announce(msg){
+  const el=document.getElementById("liveAnnounce");
+  if(!el)return;
+  el.textContent="";
+  requestAnimationFrame(()=>{el.textContent=msg;});
+}
+function selectPayload(el){
+  if(!el)return;
+  try{
+    const range=document.createRange();
+    range.selectNodeContents(el);
+    const sel=window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(err){/* selection unsupported — the text is already on screen */}
+}
+function legacyCopy(text,done){
+  let ok=false;
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text;
+    ta.setAttribute("readonly","");
+    ta.style.position="fixed";
+    ta.style.top="-1000px";
+    ta.style.left="-1000px";
+    ta.style.opacity="0";
+    document.body.appendChild(ta);
+    ta.focus();ta.select();ta.setSelectionRange(0,text.length);
+    ok=document.execCommand?document.execCommand("copy"):false;
+    document.body.removeChild(ta);
+  }catch(err){ok=false;}
+  done(ok);
+}
+function copyText(text,done){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(()=>done(true),()=>legacyCopy(text,done));
+      return;
+    }
+  }catch(err){/* fall through to the textarea path */}
+  legacyCopy(text,done);
+}
+function flashLed(el,ms){
+  if(!el)return;
+  el.classList.add("copied");
+  clearTimeout(el._ft);
+  el._ft=setTimeout(()=>el.classList.remove("copied"),ms||1400);
+}
+
+/* ============================================================
    FILTERS / SORT / RENDER
    ============================================================ */
 const state={approach:new Set(),agent:new Set(),trust:new Set(),tag:new Set(),sort:"new",limit:12};
@@ -993,13 +1100,20 @@ function draw(){
           <span class="dots"><i class="d"></i></span> fires natively
           <span class="dots"><i class="f"></i></span> via fallback
           <span class="dots"><i></i></span> unsupported
-          <em>· C Claude · X Codex · U Cursor · hover a pad to hear it</em>
+          <em>· C Claude · X Codex · U Cursor · hover a pad to hear it · ● copies that hook's install line</em>
         </span>
+      </div>
+      <div class="install">
+        <span class="ilabel">Install</span>
+        <code class="ipayload">${installPayload(p.id)}</code>
+        <button class="icopy" type="button" aria-label="Copy the Claude Code install command for ${p.id}">
+          <i class="iled"></i><span class="ilbl">Copy</span>
+        </button>
       </div>
       <div class="pads">${evs.map(ev=>{
         const b=p.bindings[ev];
         const st=a=>{const s=evState(ev,a);return `<i class="${s===2?"d":s===1?"f":""}" title="${a==="c"?"Claude Code":a==="x"?"Codex CLI":"Cursor"}: ${s===2?"native":s===1?"fallback":"unsupported"}"></i>`;};
-        return `<button class="pad" data-pk="${p.id}" data-ev="${ev}" data-role="${b.role}"
+        return `<div class="padwrap"><button class="pad" data-pk="${p.id}" data-ev="${ev}" data-role="${b.role}"
                   aria-label="Play ${ev}, sound ${b.sound}, gain ${b.gain}">
           <span class="ev">${ev}</span>
           <canvas class="pw" width="220" height="24"></canvas>
@@ -1010,7 +1124,9 @@ function draw(){
             ${b.throttle?`<span class="th">${b.throttle}ms</span>`:""}
             <span class="dots">${st("c")}${st("x")}${st("u")}</span>
           </span>
-        </button>`;}).join("")}</div>`;
+        </button><button class="padjack" type="button" data-ev="${ev}"
+                  title="Copy install command for ${ev} only"
+                  aria-label="Copy the Claude Code install command for ${p.id}, binding only ${ev}"></button></div>`;}).join("")}</div>`;
 
     det.querySelectorAll(".pad").forEach(pad=>{
       const ev=pad.dataset.ev;
@@ -1028,6 +1144,46 @@ function draw(){
     });
     det.querySelector(".soloall").addEventListener("click",e=>{
       e.stopPropagation();powered?playSequence(p):powerOn();
+    });
+
+    /* ---- install row: copy a real command, never audio, never throws ---- */
+    let curScope=null; // null = whole pack; else a single bound event name
+    const ipayloadEl=det.querySelector(".ipayload");
+    const ilabelEl=det.querySelector(".ilabel");
+    const icopyBtn=det.querySelector(".icopy");
+    const curLabel=()=>curScope?`Install · ${curScope}`:"Install";
+    const curText=()=>installPayload(p.id,curScope);
+    const curWhat=()=>curScope?`the install command for ${p.id}, binding only ${curScope},`:`the install command for ${p.id}`;
+    const refreshReadout=()=>{ilabelEl.textContent=curLabel();ipayloadEl.textContent=curText();};
+    const runCopy=(triggerEl)=>{
+      copyText(curText(),ok=>{
+        if(ok){
+          flashLed(triggerEl);
+          if(triggerEl===icopyBtn){
+            const lbl=icopyBtn.querySelector(".ilbl");
+            lbl.textContent="Copied";
+            clearTimeout(icopyBtn._lt);
+            icopyBtn._lt=setTimeout(()=>{lbl.textContent="Copy";},1400);
+          }
+          announce(`Copied ${curWhat()} to the clipboard.`);
+        }else{
+          selectPayload(ipayloadEl);
+          const restore=curLabel();
+          ilabelEl.textContent=IS_MAC?"Press ⌘C":"Press Ctrl+C";
+          flashLed(triggerEl);
+          clearTimeout(ilabelEl._rt);
+          ilabelEl._rt=setTimeout(()=>{ilabelEl.textContent=restore;},1400);
+          announce(`Clipboard access failed — ${curWhat()} is selected on screen; press ${IS_MAC?"Command C":"Control C"} to copy.`);
+        }
+      });
+    };
+    icopyBtn.addEventListener("click",e=>{
+      e.stopPropagation();curScope=null;refreshReadout();runCopy(icopyBtn);
+    });
+    det.querySelectorAll(".padjack").forEach(jack=>{
+      jack.addEventListener("click",e=>{
+        e.stopPropagation();curScope=jack.dataset.ev;refreshReadout();runCopy(jack);
+      });
     });
 
     el.addEventListener("mouseenter",()=>{

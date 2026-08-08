@@ -254,8 +254,23 @@ canvas.micro{display:block;}
 .hook.is-live.role-h .ev{color:var(--red);}
 
 .tagline{font-size:12px;color:var(--ink-2);font-style:italic;margin:0 0 5px;}
-.terms{font-size:11px;color:var(--ink-3);}
+.terms{font-size:11px;color:var(--ink-3);overflow-wrap:anywhere;}
 .terms i{font-style:italic;color:var(--ink-2);}
+.terms .lead{font-variant:small-caps;font-weight:700;letter-spacing:.05em;color:var(--ink-2);}
+.terms .cmd.roman{font-style:normal;color:var(--ink);}
+
+/* copy-to-clipboard: pack-level, set as running text, no red anywhere */
+.copy-btn{
+  font-family:var(--text);font-size:11px;line-height:1.3;background:none;border:0;
+  border-bottom:2px solid var(--ink);color:var(--ink);cursor:pointer;
+  padding:0 1px 1px;margin:0 0 0 2px;letter-spacing:.06em;text-transform:uppercase;
+  vertical-align:baseline;white-space:nowrap;
+}
+.copy-btn:hover{border-bottom-width:3px;}
+.copy-btn:focus-visible{outline:1px solid var(--red);outline-offset:2px;}
+.copy-btn.is-copied{font-variant:small-caps;text-transform:none;font-weight:700;border-bottom-width:3px;}
+.copy-btn.is-manual{font-style:italic;text-transform:none;border-bottom-width:3px;}
+.copy-announce{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
 
 /* ---------- folio / pagination ---------- */
 .folio{
@@ -293,7 +308,7 @@ input[type=range]:focus-visible{outline:1px solid var(--red);outline-offset:3px;
 /* it is, after all, a printed page */
 @media print{
   body{background:#fff;}
-  .press,.indexbar,.withheld button,.pages{display:none;}
+  .press,.indexbar,.withheld button,.pages,.copy-btn,.copy-announce{display:none;}
   .columns{column-count:3;}
   .hook{cursor:default;}
 }
@@ -1188,6 +1203,98 @@ function fmtDate(iso){
 }
 const TRUST_WORD={curated:"Curated.",attested:"Attested.",unverified:"Unverified."};
 
+/* ---------------- copy-to-clipboard: try Clipboard API, fall back to
+   execCommand, fall back to select-and-prompt. Never throws. ---------------- */
+const IS_MAC=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"");
+const COPY_KEY=IS_MAC?"⌘C":"Ctrl+C";
+const COPY_KEY_SPOKEN=IS_MAC?"Command C":"Control C";
+function execCommandCopy(text){
+  let ta=null;
+  try{
+    ta=document.createElement("textarea");
+    ta.value=text;
+    ta.setAttribute("readonly","");
+    ta.style.position="fixed";
+    ta.style.top="0";ta.style.left="0";
+    ta.style.width="1px";ta.style.height="1px";
+    ta.style.padding="0";ta.style.border="none";ta.style.opacity="0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    if(ta.setSelectionRange) ta.setSelectionRange(0,text.length);
+    let ok=false;
+    if(document.execCommand){
+      try{ ok=!!document.execCommand("copy"); }catch(e){ ok=false; }
+    }
+    return ok;
+  }catch(e){
+    return false;
+  }finally{
+    if(ta&&ta.parentNode) ta.parentNode.removeChild(ta);
+  }
+}
+function copyPayload(text,cb){
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(
+        function(){cb(true);},
+        function(){cb(execCommandCopy(text));}
+      );
+      return;
+    }
+  }catch(e){}
+  try{ cb(execCommandCopy(text)); }catch(e){ cb(false); }
+}
+function selectVisibleText(node){
+  try{
+    const sel=window.getSelection&&window.getSelection();
+    if(!sel) return;
+    const range=document.createRange();
+    range.selectNodeContents(node);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){}
+}
+function announceTo(node,msg){
+  try{
+    node.textContent="";
+    setTimeout(function(){ node.textContent=msg; },30);
+  }catch(e){}
+}
+function installPayload(pack){
+  return "Install the Tambre sound pack "+pack.s+" for Claude Code. Read "
+    +"https://github.com/nemo/tambre/blob/main/INSTALL.md and follow it.";
+}
+function wireCopy(btn,cmdNode,announceNode,text){
+  let timer=null;
+  btn.addEventListener("click",function(ev){
+    ev.stopPropagation();
+    try{
+      copyPayload(text,function(ok){
+        if(timer){ clearTimeout(timer); timer=null; }
+        btn.classList.remove("is-copied","is-manual");
+        cmdNode.classList.remove("roman");
+        if(ok){
+          btn.textContent="Copied";
+          btn.classList.add("is-copied");
+          cmdNode.classList.add("roman");
+          announceTo(announceNode,"Install command copied to clipboard.");
+          timer=setTimeout(function(){
+            btn.textContent="Copy";
+            btn.classList.remove("is-copied");
+            cmdNode.classList.remove("roman");
+          },1400);
+        }else{
+          selectVisibleText(cmdNode);
+          btn.textContent="Press "+COPY_KEY;
+          btn.classList.add("is-manual");
+          announceTo(announceNode,"Could not copy automatically. The install command is selected — press "+COPY_KEY_SPOKEN+" to copy.");
+        }
+      });
+    }catch(e){}
+  });
+}
+
 /* ---------------- filter bar ---------------- */
 function optButton(label,pressed,onClick,extra){
   const b=el("button","opt"+(extra?" "+extra:""),label);
@@ -1384,7 +1491,19 @@ function entryNode(p,ordinal){
 
   const terms=el("p","terms");
   terms.appendChild(document.createTextNode(p.lic+" · "));
-  terms.appendChild(el("i",null,"tambre install "+p.s));
+  terms.appendChild(el("span","lead","To install. "));
+  const payload=installPayload(p);
+  const cmd=el("i","cmd",payload);
+  terms.appendChild(cmd);
+  terms.appendChild(document.createTextNode(" "));
+  const copyBtn=el("button","copy-btn","Copy");
+  copyBtn.type="button";
+  copyBtn.setAttribute("aria-label","Copy the install command for "+p.s);
+  terms.appendChild(copyBtn);
+  const announce=el("span","copy-announce","");
+  announce.setAttribute("aria-live","polite");
+  terms.appendChild(announce);
+  wireCopy(copyBtn,cmd,announce,payload);
   a.appendChild(terms);
 
   return a;

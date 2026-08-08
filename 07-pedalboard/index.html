@@ -151,6 +151,32 @@ body{
 .lcd .l1{font-family:var(--cond);font-size:17px;letter-spacing:.10em;text-transform:uppercase}
 .lcd .l2{color:#4fbe7c;font-size:10.5px}
 .lcd .l3{color:#3d9b63;font-size:10px}
+/* single-binding install line — printed for whichever footswitch the LCD is
+   currently describing. Sits outside the aria-live wrapper (.lcd-live) so
+   tabbing/hovering switches doesn't force a screen reader to read the whole
+   command every time; the copy button's own aria-label carries that context. */
+.lcd-install{
+  display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;
+  margin-top:6px;padding-top:6px;border-top:1px dashed rgba(124,240,164,.25);
+}
+.lcd .l4{
+  flex:1 1 220px;min-width:0;color:#4fbe7c;font-size:10px;line-height:1.5;
+  overflow-wrap:anywhere;white-space:normal;user-select:all;-webkit-user-select:all;
+}
+.lcd-copybtn{
+  appearance:none;cursor:pointer;flex:0 0 auto;
+  font-family:var(--cond);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  padding:5px 10px;border-radius:3px;color:#eafff0;
+  background:linear-gradient(180deg,#1c3a26,#0f2417);
+  border:1px solid #051007;
+  box-shadow:inset 0 1px 0 rgba(124,240,164,.25), 0 2px 4px rgba(0,0,0,.6);
+  transition:transform 70ms ease;
+}
+.lcd-copybtn:active{transform:translateY(1px)}
+.lcd-copybtn:disabled{opacity:.4;cursor:not-allowed}
+.lcd-copybtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.lcd-copybtn[data-state="copied"]{background:linear-gradient(180deg,#5cd88a,#2f8a55);color:#08210f}
+.lcd-copybtn[data-state="manual"]{background:linear-gradient(180deg,#ffcf7a,#c98c1e);color:#2a1c02}
 
 /* ---------------- patch bay / filter rail ---------------- */
 .bay{
@@ -517,7 +543,7 @@ body.legend .fsw .fname{font-family:var(--mono);font-size:8.5px;letter-spacing:0
 
 /* spec plate at the bottom of the enclosure */
 .plate{
-  margin:11px -6px -4px;padding:8px 9px;border-radius:3px;
+  margin:11px -6px 0;padding:8px 9px;border-radius:3px;
   background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(0,0,0,.16));
   border:1px solid rgba(0,0,0,.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
@@ -529,6 +555,40 @@ body.legend .fsw .fname{font-family:var(--mono);font-size:8.5px;letter-spacing:0
 .plate .cov{display:flex;flex-wrap:wrap;gap:9px;margin-top:3px;opacity:.92}
 .plate .cov u{text-decoration:none;opacity:.7}
 .plate .tags{margin-top:3px;opacity:.72;overflow-wrap:anywhere}
+
+/* silkscreened INSTALL legend — stamped strip below the spec plate.
+   Fixed dark chip + fixed light ink, deliberately NOT var(--pink)/the raw
+   finish gradient: several finishes (seafoam, sky) already run embossed
+   text near 4.5:1, so this control gets its own guaranteed-contrast plate
+   instead of inheriting the per-finish emboss scheme. */
+.install{
+  margin:8px -6px -4px;padding:7px 8px 8px;border-radius:3px;
+  background:rgba(0,0,0,.72);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10), inset 0 0 0 1px rgba(0,0,0,.4);
+}
+.install-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.install-lbl{
+  font-family:var(--cond);font-size:9px;font-weight:700;letter-spacing:.20em;
+  text-transform:uppercase;color:#ffb43c;
+}
+.install-cmd{
+  display:block;font-family:var(--mono);font-size:8.5px;line-height:1.5;
+  color:#e4e0d4;overflow-wrap:anywhere;white-space:normal;
+  user-select:all;-webkit-user-select:all;
+}
+.install-btn{
+  appearance:none;cursor:pointer;flex:0 0 auto;
+  font-family:var(--cond);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;
+  padding:4px 10px 5px;border-radius:3px;color:#f4f1e8;
+  background:linear-gradient(180deg,#5a5f65,#3a3e43);
+  border:1px solid #17191b;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 2px 4px rgba(0,0,0,.5);
+  transition:transform 70ms ease;
+}
+.install-btn:active{transform:translateY(1px)}
+.install-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.install-btn[data-state="copied"]{background:linear-gradient(180deg,#5cd88a,#2f8a55);color:#08210f}
+.install-btn[data-state="manual"]{background:linear-gradient(180deg,#ffcf7a,#c98c1e);color:#2a1c02}
 
 /* ---------------- pager ---------------- */
 .pager{
@@ -627,10 +687,17 @@ footer.notes b{color:#c8c2b6}
       <span class="knob-cap">master<br><span id="mvolcap">80%</span></span>
     </div>
 
-    <div class="lcd" role="status" aria-live="polite">
-      <div class="l1">MAINS OFF</div>
-      <div class="l2">Stomp the red rocker to power the board.</div>
-      <div class="l3">No sound is produced before that gesture.</div>
+    <div class="lcd">
+      <div class="lcd-live" role="status" aria-live="polite">
+        <div class="l1">MAINS OFF</div>
+        <div class="l2">Stomp the red rocker to power the board.</div>
+        <div class="l3">No sound is produced before that gesture.</div>
+      </div>
+      <div class="lcd-install">
+        <code class="l4" id="lcdcmd">Stomp, click or focus a footswitch to load its install command.</code>
+        <button class="lcd-copybtn" type="button" id="lcdcopybtn" disabled
+                aria-label="Copy install command">copy</button>
+      </div>
     </div>
   </div>
 </header>
@@ -1473,18 +1540,20 @@ function play(pack, bd, viaHover){
 }
 
 /* ---------- LCD ---------- */
-const lcd = {l1:null,l2:null,l3:null};
+const lcd = {l1:null,l2:null,l3:null,cmd:null,copyBtn:null};
 function lcdSet(a,b2,c){
   if(!lcd.l1) return;
   lcd.l1.textContent=a; lcd.l2.textContent=b2; lcd.l3.textContent=c;
 }
 function lcdIdle(){
+  lcdCancelAnnounce();
   if(armed) lcdSet('BOARD LIVE','Hover any footswitch to audition its hook.',
                    'Master '+Math.round(masterVol*100)+'%  ·  polyphony 6  ·  hover throttle '+HOVER_THROTTLE+' ms');
   else lcdSet('MAINS OFF','Stomp the red rocker to power the board.',
               'No sound is produced before that gesture.');
 }
 function lcdBinding(pack, bd){
+  lcdCancelAnnounce();
   const cov = AGENTS.map(a=>{
     const r = reach(bd.event, a.id);
     if(r==='native') return a.short+' native';
@@ -1495,6 +1564,129 @@ function lcdBinding(pack, bd){
     pack.title+'  ·  sound "'+bd.sound+'"  ·  gain '+bd.gain.toFixed(2)+
       '  ·  throttle '+bd.throttle+' ms  ·  role '+bd.role,
     cov);
+  updateLcdInstall(pack, bd);
+}
+
+/* ---------- install command payloads + clipboard ----------
+   No Tambre CLI or registry server exists yet (spec is v0.1, unimplemented).
+   Every pack exposes a copy-pasteable natural-language command that points
+   Claude Code at this repo's INSTALL.md; the currently-engaged footswitch
+   additionally offers a single-binding variant via the LCD. */
+const INSTALL_URL = 'https://github.com/nemo/tambre/blob/main/INSTALL.md';
+function installPayload(pack){
+  return 'Install the Tambre sound pack '+pack.name+' for Claude Code. Read '+INSTALL_URL+' and follow it.';
+}
+function bindingPayload(pack, bd){
+  return 'Install the Tambre sound pack '+pack.name+' for Claude Code, binding only '+bd.event+
+         '. Read '+INSTALL_URL+' and follow it.';
+}
+
+function selectElementText(el){
+  try{
+    if(window.getSelection && document.createRange && el){
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }catch(e){}
+}
+
+/* Must never throw — this file is routinely opened from file://, where
+   navigator.clipboard is frequently absent or rejects as an insecure
+   context. Reports back 'copied' | 'copied-fallback' | 'manual'. */
+const COPY_KEY=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"")?"⌘C":"Ctrl+C";
+function copyText(text, cb){
+  function execFallback(){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly','');
+      ta.style.position='fixed'; ta.style.top='-1000px'; ta.style.left='-1000px'; ta.style.opacity='0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try{ ta.setSelectionRange(0, text.length); }catch(e){}
+      let ok=false;
+      try{ ok = document.execCommand('copy'); }catch(e){ ok=false; }
+      document.body.removeChild(ta);
+      cb(ok ? 'copied-fallback' : 'manual');
+    }catch(e){ cb('manual'); }
+  }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ cb('copied'); }, function(){ execFallback(); });
+      return;
+    }
+  }catch(e){}
+  execFallback();
+}
+
+function flashButton(btn, label, state){
+  if(!btn) return;
+  if(!btn.hasAttribute('data-label')) btn.setAttribute('data-label', btn.textContent);
+  btn.textContent = label;
+  if(state) btn.setAttribute('data-state', state); else btn.removeAttribute('data-state');
+  clearTimeout(btn._flashT);
+  btn._flashT = setTimeout(function(){
+    btn.textContent = btn.getAttribute('data-label');
+    btn.removeAttribute('data-state');
+  }, 1400);
+}
+
+/* Copy feedback per spec: a visible button-state change reverting after
+   ~1.4s (flashButton, local to the control) plus one spoken confirmation.
+   The confirmation is routed through the LCD's existing aria-live region
+   instead of standing up a second live region per control — the LCD is
+   sticky, so it's on screen no matter which pedal you copied from. */
+function doCopy(text, btn, visibleEl, describeLabel){
+  copyText(text, function(status){
+    if(status==='copied' || status==='copied-fallback'){
+      flashButton(btn, 'copied', 'copied');
+      lcdAnnounce('COPIED', (describeLabel||'Install command')+' copied to the clipboard.',
+                  'Paste it into Claude Code to install.');
+    } else {
+      if(visibleEl) selectElementText(visibleEl);
+      flashButton(btn, 'press '+COPY_KEY.toLowerCase(), 'manual');
+      lcdAnnounce('SELECT & COPY', 'Clipboard blocked — the command text is selected.',
+                  'Press '+COPY_KEY+' to copy it.');
+    }
+  });
+}
+
+let lcdAnnounceTimer=null, lcdAnnounceSaved=null;
+function lcdCancelAnnounce(){
+  if(lcdAnnounceTimer){ clearTimeout(lcdAnnounceTimer); lcdAnnounceTimer=null; lcdAnnounceSaved=null; }
+}
+function lcdAnnounce(a,b2,c){
+  if(!lcd.l1) return;
+  if(!lcdAnnounceTimer) lcdAnnounceSaved = {a:lcd.l1.textContent, b:lcd.l2.textContent, c:lcd.l3.textContent};
+  else clearTimeout(lcdAnnounceTimer);
+  lcdSet(a,b2,c);
+  lcdAnnounceTimer = setTimeout(function(){
+    lcdAnnounceTimer=null;
+    if(lcdAnnounceSaved) lcdSet(lcdAnnounceSaved.a, lcdAnnounceSaved.b, lcdAnnounceSaved.c);
+    lcdAnnounceSaved=null;
+  }, 1400);
+}
+
+/* The single-binding command for whichever footswitch the LCD is currently
+   describing — same triggers as lcdBinding (hover, click, keyboard focus). */
+function updateLcdInstall(pack, bd){
+  if(!lcd.cmd || !lcd.copyBtn) return;
+  if(!pack || !bd){
+    lcd.cmd.textContent = 'Stomp, click or focus a footswitch to load its install command.';
+    lcd.copyBtn.disabled = true;
+    lcd.copyBtn.removeAttribute('data-pack');
+    lcd.copyBtn.removeAttribute('data-event');
+    lcd.copyBtn.setAttribute('aria-label','Copy install command');
+    return;
+  }
+  lcd.cmd.textContent = bindingPayload(pack, bd);
+  lcd.copyBtn.disabled = false;
+  lcd.copyBtn.setAttribute('data-pack', pack.name);
+  lcd.copyBtn.setAttribute('data-event', bd.event);
+  lcd.copyBtn.setAttribute('aria-label', 'Copy install command for '+pack.title+', binding only '+bd.event);
 }
 
 /* ---------- helpers ---------- */
@@ -1575,6 +1767,14 @@ function pedalHTML(p){
         '<span>pub '+esc(p.published)+'</span></span>'+
       '<span class="cov">'+cov+'</span>'+
       '<span class="tags">'+esc(p.tags.map(t=>'#'+t).join(' '))+'</span>'+
+    '</div>'+
+    '<div class="install">'+
+      '<div class="install-hd">'+
+        '<span class="install-lbl">install</span>'+
+        '<button class="install-btn" type="button" data-install-copy data-pack="'+esc(p.name)+'"'+
+          ' aria-label="'+esc('Copy install command for '+p.title)+'">copy</button>'+
+      '</div>'+
+      '<code class="install-cmd">'+esc(installPayload(p))+'</code>'+
     '</div>'+
   '</article>';
 }
@@ -1831,6 +2031,17 @@ function boot(){
   lcd.l1 = document.querySelector('.lcd .l1');
   lcd.l2 = document.querySelector('.lcd .l2');
   lcd.l3 = document.querySelector('.lcd .l3');
+  lcd.cmd = document.getElementById('lcdcmd');
+  lcd.copyBtn = document.getElementById('lcdcopybtn');
+  lcd.copyBtn.addEventListener('click', e=>{
+    e.stopPropagation();
+    const pname = lcd.copyBtn.getAttribute('data-pack');
+    const ev = lcd.copyBtn.getAttribute('data-event');
+    const p = pname && packByName(pname);
+    const bd = p && bindingOf(p, ev);
+    if(!p || !bd) return;
+    doCopy(bindingPayload(p, bd), lcd.copyBtn, lcd.cmd, p.title+' · '+bd.event+' install command');
+  });
 
   buildControls();
   render();
@@ -1841,6 +2052,17 @@ function boot(){
     if(b2) stomp(b2, true);
   });
   wall.addEventListener('click', e=>{
+    const inst = e.target && e.target.closest && e.target.closest('[data-install-copy]');
+    if(inst){
+      e.stopPropagation();
+      const p = packByName(inst.getAttribute('data-pack'));
+      if(p){
+        const wrap = inst.closest('.install');
+        const codeEl = wrap && wrap.querySelector('.install-cmd');
+        doCopy(installPayload(p), inst, codeEl, p.title+' install command');
+      }
+      return;
+    }
     const b2 = e.target && e.target.closest && e.target.closest('.fsw');
     if(b2) stomp(b2, false);
   });
@@ -1863,7 +2085,8 @@ function boot(){
     state, PACKS, AGENTS, render, stomp, play, reach, coverage, fullyNative,
     pcmFor, renderSdsl, masterChain, peaksFrom, SUPPORT, FALLBACK, ROLE,
     voices:()=>voices, armed:()=>armed, setMaster:v=>{masterVol=v;},
-    HOVER_THROTTLE, POLYPHONY
+    HOVER_THROTTLE, POLYPHONY,
+    installPayload, bindingPayload, copyText, INSTALL_URL, updateLcdInstall
   };
 }
 if(typeof document!=='undefined'){

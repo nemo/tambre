@@ -66,6 +66,25 @@ tbody tr:last-child td{border-bottom:none}
 .lede .sub{color:var(--ink-2);margin:.5rem 0}
 .lede .meta{font-size:.82rem;color:var(--ink-3);margin-top:1rem;font-family:var(--mono)}
 
+.install{max-width:46rem;margin:1.6rem auto 0;padding:0 1.5rem}
+.install h2{font-size:.82rem;letter-spacing:.14em;text-transform:uppercase;margin:0 0 .5rem;color:var(--ink-2)}
+.install .sub{color:var(--ink-2);margin:.4rem 0 .9rem}
+.installrow{
+  display:flex;gap:.6rem;align-items:flex-start;flex-wrap:wrap;
+  border:1px solid var(--rule);border-radius:3px;background:#fafafa;padding:.7rem .8rem;
+}
+.installrow code{
+  flex:1 1 20rem;background:none;padding:.15rem 0;font-size:.82rem;line-height:1.5;
+  white-space:normal;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text;
+}
+.installrow button{
+  font:inherit;font-size:.85rem;border:1px solid var(--ink-2);background:#fff;color:var(--ink);
+  padding:.35rem .8rem;border-radius:3px;cursor:pointer;flex:0 0 auto;
+}
+.installrow button:hover{background:var(--rule-2)}
+.installrow button:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.install .hint{min-height:1.1em;margin:.4rem 0 0}
+
 .library{max-width:64rem;margin:0 auto;padding:1.5rem 1.5rem 0}
 .libhead{
   display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap;

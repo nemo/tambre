@@ -24,6 +24,16 @@ session* actually sounds like instead of what one chime sounds like.
 exist". This one answers "what will my Tuesday sound like", which is the question that decides
 an install. The 24-pack list is present, filterable, sortable and paged — but it is furniture.
 
+**Install lives where the decision gets made, not in the chooser.** There is no CLI and no
+registry server yet, so both hook-index panels carry a copy-to-clipboard control for a
+natural-language line — "Install the Tambre sound pack `@scope/name` for Claude Code. Read
+`INSTALL.md` and follow it." — that the user pastes into their agent instead of a shell. It picks
+up its lane's hue and nothing else. Every bound row in the 16-event table also gets a small `⎘`
+that swaps the same control to a single-binding variant ("...binding only `tool.pre`...") — the
+natural unit of "I only want this one sound" is a row you're already looking at, not the whole
+pack. Clipboard access is unreliable from `file://`, so the command is always visible and
+selectable as plain text and never depends on the clipboard actually working.
+
 **Two lanes, one time axis.** The purchase decision is comparative, and comparison only works
 when the *moment* is held constant. Solo A / solo B / swap ⇄ means you can flip between two
 packs at the same `permission.request` in under a second. A single-lane version of this design
@@ -105,6 +115,10 @@ a phase band loops that phase — the fastest possible path to "just let me hear
 - The lane gutter clamps long titles to two lines, so
   `@verbose/exhaustively-descriptive-longform-pack-name` is unreadable while loaded. The full
   title survives in the detail panel and the chooser row, which is the least-bad place to lose it.
+- **The single-binding copy steals the shared install box.** Clicking a row's `⎘` swaps the one
+  visible command in that lane's panel from "install everything" to "install just this hook" until
+  you click back — there's no second box, so if you meant to grab the full install after already
+  narrowing to one event, you have to notice the mode label changed and reset it first.
 
 ## Burned for future variants
 
@@ -188,3 +202,17 @@ libraries for headless Chromium, so I did not look at this page. Unverified, spe
 - Actual sound. I asserted numeric properties of 90 buffers; I have not heard one of them. Whether
   the burst is "pleasant" is an inference from level, count and duration, not a listening result.
 - Mouse-driven scrub feel, horizontal scroll behaviour, and anything touch.
+
+**Install-affordance addendum (2026-08-08).** The fake `npx tambre install` line was replaced with
+a copy-to-clipboard natural-language install command per lane, plus a per-row single-binding
+variant; see "Load-bearing decisions" above. Checked with a fresh, separate 33-assertion Node 22 +
+jsdom pass (not the original 228-assertion harness, which isn't part of this repo): `<script>`
+still `node --check`s clean; both lane panels render the canonical payload as visible, selectable
+text matching the exact wording spec'd; the copy button and every bound row's `⎘` copy through the
+`execCommand` fallback (jsdom has no async Clipboard API, so this exercises the real degraded path,
+not the happy path); clicking either does not create an `AudioContext`; the row button correctly
+switches the shared box to the single-binding payload and back on reset; silent rows get no button.
+0 new console errors — the 32 `HTMLCanvasElement.getContext` errors jsdom throws are pre-existing
+(present on the unmodified file too) and unrelated to this change. Not verified: focus-ring
+appearance, the 1.4 s feedback timing by eye, and real clipboard behavior in an actual browser —
+same "no browser available" limitation as the rest of this file.

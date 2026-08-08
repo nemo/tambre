@@ -175,12 +175,12 @@ table.cov td.num{text-align:right; color:var(--text)}
 .covbar i.f{background:var(--ice); opacity:.55}
 .covbar i.u{background:var(--rose); opacity:.35}
 .hooks{list-style:none; margin:8px 0 0; padding:0}
-.hooks li{border-top:1px solid var(--grid)}
-.hooks button{
+.hooks li{border-top:1px solid var(--grid); display:flex; align-items:center}
+.hooks button.hookfire{
   display:grid; grid-template-columns:9px 1fr auto; gap:8px; align-items:baseline;
-  width:100%; text-align:left; padding:7px 2px; font:10px/1.35 var(--mono); color:var(--dim);
+  flex:1; min-width:0; text-align:left; padding:7px 2px; font:10px/1.35 var(--mono); color:var(--dim);
 }
-.hooks button:hover,.hooks button:focus-visible{background:var(--ink2); color:var(--text); outline:none}
+.hooks button.hookfire:hover,.hooks button.hookfire:focus-visible{background:var(--ink2); color:var(--text); outline:none}
 .hooks .dot{width:7px;height:7px;border-radius:50%;background:var(--mint);align-self:center}
 .hooks .r-boundary .dot{background:var(--violet)}
 .hooks .r-churn .dot{background:var(--ice);opacity:.6}
@@ -188,11 +188,29 @@ table.cov td.num{text-align:right; color:var(--text)}
 .hooks .sn{color:var(--faint)}
 .hooks .gn{color:var(--dim); font-variant-numeric:tabular-nums}
 .hooks li.warn .ev::after{content:" ×claude"; color:var(--rose); font-size:8px}
-.inst{
-  display:block; width:100%; margin:14px 0 0; padding:8px 9px; text-align:left;
-  font:10px/1.4 var(--mono); color:var(--mint); background:var(--ink2);
-  border:1px solid var(--line); border-radius:2px; word-break:break-all;
+.hooks button.hookcopy{
+  flex:0 0 auto; margin-left:6px; padding:4px 7px; font:9px/1 var(--mono); color:var(--faint);
+  border:1px solid var(--line); border-radius:2px; background:transparent;
 }
+.hooks button.hookcopy:hover,.hooks button.hookcopy:focus-visible{color:var(--ink); background:var(--mint); border-color:var(--mint); outline:none}
+.hooks button.hookcopy.copied{color:var(--ink); background:var(--ice); border-color:var(--ice)}
+.hooks button.hookcopy.fail{color:var(--text); background:transparent; border-color:var(--dim)}
+
+/* ---- install payload: one visible, selectable readout ---- */
+.install{margin-top:16px}
+.payload{
+  margin:0; padding:9px 10px; font:10px/1.5 var(--mono); color:var(--mint);
+  background:var(--ink2); border:1px solid var(--line); border-radius:2px;
+  white-space:pre-wrap; word-break:break-word; user-select:text; -webkit-user-select:text;
+}
+.copyrow{display:flex; align-items:center; gap:8px; margin-top:8px}
+.copybtn{
+  font:10px/1 var(--mono); border:1px solid var(--line); border-radius:2px;
+  padding:6px 11px; color:var(--mint); background:transparent;
+}
+.copybtn:hover,.copybtn:focus-visible{color:var(--ink); background:var(--mint); border-color:var(--mint); outline:none}
+.copybtn.copied{color:var(--ink); background:var(--ice); border-color:var(--ice)}
+.copybtn.fail{color:var(--text); background:transparent; border-color:var(--dim)}
 .ranked{list-style:none; margin:6px 0 0; padding:0}
 .ranked li{border-top:1px solid var(--grid)}
 .ranked button{
@@ -1561,6 +1579,89 @@ function highlightHookRow(event){
 }
 
 /* =====================================================================
+   INSTALL PAYLOAD — there is no Tambre CLI and no registry server yet
+   (spec v0.1, unimplemented). The affordance is a copy-pasteable
+   natural-language instruction that points an agent at this repo's
+   INSTALL.md and lets it perform the install itself.
+   ===================================================================== */
+var INSTALL_DOC="https://github.com/nemo/tambre/blob/main/INSTALL.md";
+function installPayload(p){
+  return "Install the Tambre sound pack "+p.name+" for Claude Code. Read "+INSTALL_DOC+" and follow it.";
+}
+function installPayloadForHook(p,event){
+  return "Install the Tambre sound pack "+p.name+" for Claude Code, binding only "+event+". Read "+INSTALL_DOC+" and follow it.";
+}
+/* clipboard: navigator.clipboard, then a hidden textarea + execCommand,
+   then give up gracefully — this must never throw and always calls back. */
+var COPY_KEY=/Mac|iPhone|iPod|iPad/.test(navigator.platform||navigator.userAgent||"")?"⌘C":"Ctrl+C";
+function copyToClipboard(text,cb){
+  var done=false;
+  function settle(ok){ if(done) return; done=true; cb(!!ok); }
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ settle(true); },function(){ settle(execCopyFallback(text)); });
+      return;
+    }
+  }catch(e){}
+  settle(execCopyFallback(text));
+}
+function execCopyFallback(text){
+  var ta=null, ok=false;
+  try{
+    ta=document.createElement("textarea");
+    ta.value=text;
+    ta.setAttribute("readonly","");
+    ta.style.position="fixed"; ta.style.top="-1000px"; ta.style.left="-1000px"; ta.style.opacity="0";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    if(ta.setSelectionRange) ta.setSelectionRange(0,text.length);
+    try{ ok=document.execCommand("copy"); }catch(e2){ ok=false; }
+  }catch(e){ ok=false; }
+  finally{ try{ if(ta&&ta.parentNode) ta.parentNode.removeChild(ta); }catch(e3){} }
+  return ok;
+}
+function selectVisibleText(el){
+  try{
+    if(!el||!window.getSelection) return;
+    var range=document.createRange();
+    range.selectNodeContents(el);
+    var sel=window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }catch(e){}
+}
+/* wires a <button> to copy textFn()'s result, mirror it into the shared
+   visible payload element, and show ~1.4 s of feedback either way. The
+   payload text never disappears, so a clipboard failure is never a dead
+   end — on total failure it is also selected for the user. */
+function wireCopyButton(btn,textFn,payloadEl){
+  var idle=btn.textContent, resetT=null;
+  btn.addEventListener("click",function(){
+    var text=textFn();
+    if(payloadEl) payloadEl.textContent=text;
+    if(resetT){ clearTimeout(resetT); resetT=null; }
+    copyToClipboard(text,function(ok){
+      btn.classList.remove("copied","fail");
+      if(ok){
+        btn.textContent="copied";
+        btn.classList.add("copied");
+        announce("install command copied");
+      }else{
+        btn.textContent="press "+COPY_KEY;
+        btn.classList.add("fail");
+        announce("clipboard unavailable — command selected, press "+COPY_KEY+" to copy");
+        if(payloadEl) selectVisibleText(payloadEl);
+      }
+      resetT=setTimeout(function(){
+        btn.textContent=idle;
+        btn.classList.remove("copied","fail");
+        resetT=null;
+      },1400);
+    });
+  });
+}
+
+/* =====================================================================
    PANEL — detail when a node is selected, ranked list otherwise
    ===================================================================== */
 function drawWave(cv,pcm){
@@ -1684,8 +1785,28 @@ function renderPanel(){
   for(var ai=0;ai<AGENTS.length;ai++) tab.appendChild(covRow(p,AGENTS[ai]));
   host.appendChild(tab);
 
+  /* install payload built here so hook rows below can feed it, then
+     appended after the hook list — see wireCopyButton */
+  var installBlock=document.createElement("div"); installBlock.className="install";
+  var ih=document.createElement("p"); ih.className="grouphd"; ih.style.marginTop="16px";
+  ih.textContent="install";
+  installBlock.appendChild(ih);
+  var payloadEl=document.createElement("pre"); payloadEl.className="payload";
+  payloadEl.textContent=installPayload(p);
+  installBlock.appendChild(payloadEl);
+  var copyRow=document.createElement("div"); copyRow.className="copyrow";
+  var mainCopy=document.createElement("button");
+  mainCopy.type="button"; mainCopy.className="copybtn"; mainCopy.textContent="copy";
+  mainCopy.setAttribute("aria-label","copy install command for "+p.name);
+  wireCopyButton(mainCopy,function(){ return installPayload(p); },payloadEl);
+  copyRow.appendChild(mainCopy);
+  installBlock.appendChild(copyRow);
+  var inote=document.createElement("p"); inote.className="note"; inote.style.margin="6px 0 0";
+  inote.textContent="Paste into Claude Code — it reads this repo's INSTALL.md and installs itself. There is no CLI yet.";
+  installBlock.appendChild(inote);
+
   var hh=document.createElement("p"); hh.className="grouphd"; hh.style.marginTop="16px";
-  hh.textContent="bound hooks — hover a row or a satellite";
+  hh.textContent="bound hooks — hover a row or a satellite, copy binds just one";
   host.appendChild(hh);
   var ul2=document.createElement("ul"); ul2.className="hooks";
   for(var i2=0;i2<p.bindingList.length;i2++)(function(b){
@@ -1700,7 +1821,7 @@ function renderPanel(){
       for(var f=0;f<chain.length;f++) if(SUPPORT[chain[f]].indexOf(c)>=0){ok=true;break;}
       miss.push((ok?"fb ":"no ")+AGENTS[ai2].label.split(" ")[0]);
     }
-    var btn=document.createElement("button"); btn.type="button";
+    var btn=document.createElement("button"); btn.type="button"; btn.className="hookfire";
     var dot=document.createElement("span"); dot.className="dot";
     var mid2=document.createElement("span");
     var evs=document.createElement("span"); evs.className="ev"; evs.textContent=b.event;
@@ -1723,18 +1844,18 @@ function renderPanel(){
     btn.addEventListener("mouseenter",fire);
     btn.addEventListener("focus",fire);
     btn.addEventListener("click",fire);
-    li.appendChild(btn); ul2.appendChild(li);
+    li.appendChild(btn);
+
+    var cbtn=document.createElement("button");
+    cbtn.type="button"; cbtn.className="hookcopy"; cbtn.textContent="copy";
+    cbtn.setAttribute("aria-label","copy install command binding only "+b.event);
+    wireCopyButton(cbtn,function(){ return installPayloadForHook(p,b.event); },payloadEl);
+    li.appendChild(cbtn);
+
+    ul2.appendChild(li);
   })(p.bindingList[i2]);
   host.appendChild(ul2);
-
-  var inst=document.createElement("button");
-  inst.className="inst"; inst.type="button";
-  inst.textContent="npx tambre install "+p.name+" --agent all";
-  inst.addEventListener("click",function(){
-    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(inst.textContent);
-    announce("install command copied");
-  });
-  host.appendChild(inst);
+  host.appendChild(installBlock);
 }
 
 /* =====================================================================

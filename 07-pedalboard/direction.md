@@ -63,6 +63,20 @@ the one dangerous switch on the panel (red lamp).
 `-135° + gain × 270°`. The number is the truth; the knob is the pattern-recognition layer
 — you can see at a glance that a bank's churn switches are all turned down.
 
+**Install affordance.** There is no Tambre CLI or registry server yet — the spec is v0.1
+and unimplemented — so "installing" a pack means handing an agent a natural-language
+command that points it at this repo's `INSTALL.md`. Every pedal gets a stamped `INSTALL`
+plate below the spec plate: a fixed-contrast dark chip (not the finish-dependent embossed
+`--pink`) holding the exact copy-pasteable command in monospace, plus a `COPY` button.
+Because each footswitch here literally *is* a bound hook, the LCD — which already prints
+event, sound, gain, throttle, role and reachability for whatever switch you last touched —
+also grows a single-binding command line and its own `COPY` button, so you can install a
+pack scoped to just the hook you're looking at. Copy confirmation is two-part: a local
+button-state flash (`copy → copied`, or `press ⌘c` if both `navigator.clipboard` and
+`execCommand` fail) reverting after 1.4 s, and one spoken line borrowed from the LCD's
+existing `aria-live="polite"` region rather than standing up a second one — the LCD is
+sticky, so it's on screen no matter which of the 24 pedals you copied from.
+
 **Audio.** Six generators written from scratch (`tap`, `modal`, `pluck`, `tone`, `blip`,
 `noise`), RBJ cookbook band-pass normalised by `a0`, FNV-1a + mulberry32 seeded per
 `"<pkg>@<version>/<sound>"` so waveforms are stable across reloads. Mandatory master
@@ -114,7 +128,13 @@ master knob apply downstream through a `GainNode`. Measured worst-case peak acro
   are unreliable); embossed silkscreen text on saturated enclosures lands between roughly
   4.5:1 and 7:1 depending on the finish — the seafoam and sky boxes are the weakest and
   should have been darkened; and a 14-button bank inside a card is a lot of tab stops with
-  no skip mechanism.
+  no skip mechanism. The new per-pedal `COPY` button adds exactly one more tab stop after
+  the bank (not one per footswitch), which is proportionally cheap on Brass Tacks but is a
+  ~50% increase on Dead Room's two-switch card — still no skip link, so the cost compounds
+  with the existing one. It deliberately does *not* inherit the embossed `--pink` text
+  colour that's already borderline on seafoam/sky: it sits on its own fixed dark chip with
+  fixed ink instead, specifically to avoid adding a second control with a finish-dependent
+  contrast failure on top of the one already flagged above.
 - **The rotary selector is a worse control than a list of radio buttons.** It's charming
   and it is fully keyboard-operable, but the dial itself only cycles forward on click, so
   reaching "bed" from "hybrid" takes four clicks unless you use the text options beside it.
@@ -172,6 +192,19 @@ master knob apply downstream through a `GainNode`. Measured worst-case peak acro
   against the max of the visible set; paging (content changes, prev/next disable at the
   ends, exactly one shelf LED lit); the LEGEND switch round-trip; BYPASS ALL resetting
   every control; and the master-volume knob's arrow keys. Test calls `process.exit`.
+- **Install affordance, jsdom, 23 assertions, zero console errors:** one `COPY` button per
+  rendered pedal with visible command text matching `installPayload()` exactly; clicking it
+  neither arms the board nor plays a voice; with `navigator.clipboard` absent (as on
+  `file://`) it falls through to `execCommand('copy')`; button flips to `copied` and reverts
+  to `copy` after ~1.4 s; the LCD's `COPY` button starts `disabled` with a placeholder,
+  enables and fills in the exact `bindingPayload()` for whatever footswitch is focused
+  (tested on `focusin`, matching the existing hover/click/focus triggers), and focusing a
+  switch still does not play it; clicking the LCD copy button announces `COPIED` on `l1`
+  through the LCD's existing `aria-live` region and reverts after ~1.4 s without a second
+  live region; existing mains-arm and footswitch-click playback still work unchanged after
+  all of the above; and — with both `navigator.clipboard` and `execCommand` forced to fail —
+  the manual fallback selects the visible command text (`window.getSelection()` matches it
+  exactly) and the button shows `press ⌘c`.
 
 **Not checked — and this matters more here than for any other variant:**
 
@@ -191,3 +224,21 @@ master knob apply downstream through a `GainNode`. Measured worst-case peak acro
   the churn switches are actually unobtrusive at 0.2.
 - Mobile/touch, screen-reader behaviour with a real AT, and actual contrast ratios are all
   asserted from reading the CSS, not measured.
+- **The install `COPY` buttons' keyboard activation was not exercised.** jsdom does not
+  implement native Enter/Space activation for `<button>` elements, so I could only click
+  them programmatically. This is the same untested-but-standard territory as every other
+  secondary control on the page — the rotary options, toggles, jacks, sort switch and
+  BYPASS ALL button all rely on the same native behaviour with no custom keydown handling,
+  and none of those were verified in jsdom either; only `.fsw` gets bespoke Enter/Space
+  handling (to avoid double-firing) and only `.fsw` was actually tested against real
+  keyboard events.
+- A real `navigator.clipboard.writeText` success was never exercised — jsdom has no
+  Clipboard API, so only the `execCommand` fallback and the fully-manual
+  select-and-prompt path were tested. Whether `writeText` actually resolves from a real
+  `file://` page in Chrome/Safari/Firefox is unverified; the fallback chain exists
+  specifically because it's expected to fail there at least some of the time.
+- The install chip's contrast against all 14 finishes is arithmetic, not measured: it uses
+  a fixed `rgba(0,0,0,.72)` background with fixed light text specifically to sidestep the
+  seafoam/sky emboss problem above, and a hand-computed luminance check against the
+  lightest (cream) and one mid-tone (sky) finish landed around 8:1 and 10:1 — but nobody
+  has pointed a contrast checker at a rendered pixel.
