@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tambre — implementation spec v0.1</title>
+<link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+<header class="sitehead">
+  <a class="home" href="../index.html">Tambre</a>
+  <span class="crumb">implementation spec v0.1</span>
+</header>
+<main class="prose">
+<h1>Tambre — an open registry for AI agent sound packs</h1>
+<p><strong>Status:</strong> implementation spec, v0.1 <strong>Audience:</strong> the coding agent building this <strong>Date:</strong> 2026-08-08</p>
+<hr>
+<h2>0. Naming</h2>
+<p><code>Tambre</code> is the placeholder — the film craft of performing everyday sound effects in sync with picture, which is exactly what this does for an agent. It's short, available-ish as a concept, and reads well as a verb (<code>tambre install</code>, <code>tambre.dev</code>). Swap it if you have something better; the string appears in the CLI name, the manifest <code>spec</code> URL, and the env var prefix, and nowhere else that matters. Alternatives considered: Timbre, Chime, Hookfire, Audible.</p>
+<hr>
+<h2>1. What this is</h2>
+<p>A package registry for <strong>sound packs that bind to AI coding agent lifecycle events</strong>. Publish a pack once; it works on Claude Code, Codex CLI, and Cursor.</p>
+<p>Three pieces:</p>
+<ol><li><strong>A sound DSL</strong> (<code>sdsl/1</code>) — a JSON description of how to synthesise a sound from physical-modelling primitives. Kilobytes, not megabytes. Deterministic: the same document renders to bit-identical audio on every implementation.</li><li><strong>A canonical event taxonomy + adapter layer</strong> — agent-neutral event names (<code>turn.end</code>, <code>tool.pre</code>, <code>permission.request</code>) and per-agent adapters that translate them into that agent's native hook config.</li><li><strong>A registry</strong> — versioned, immutable packages under publisher scopes, browsable like Pinterest, installable like npm.</li></ol>
+<p>A working reference implementation of the DSL and its renderer already exists (30 packs, 381 sounds, dual Python/JS engines verified sample-identical to 7e-9). Port it; don't redesign it.</p>
+<hr>
+<h2>2. Non-negotiable invariants</h2>
+<p>These are the properties that make the thing safe and cheap. Violating any of them is a redesign, not a tweak.</p>
+<p><strong>I1. Packages contain no executable code. Ever.</strong> A package is JSON plus optionally WAV files. The registry never distributes anything that runs. This matters more here than for a normal registry, because installing a pack writes entries into an agent's hook config — and hook configs <em>do</em> execute. The executable surface is exactly two things, both shipped by us, both audited once: the <code>tambre</code> CLI and the <code>tambre-play</code> player script. A malicious pack's worst case is an unpleasant noise.</p>
+<p><strong>I2. Rendering is deterministic and offline.</strong> <code>sdsl</code> documents render identically in the browser (audition), in the CLI (install), and on the server (preview waveforms). Same seeded PRNG, same filter coefficients, same envelopes. No "the preview sounded different" bugs, and no server round-trip to hear something.</p>
+<p><strong>I3. Published versions are immutable.</strong> <code>@scope/name@1.2.0</code> resolves to one artifact digest forever. Yank/deprecate flags exist; overwrite does not.</p>
+<p><strong>I4. Hooks never block the agent.</strong> The player detaches, discards stdio, and exits 0 immediately. A missing audio device, a corrupt WAV, or a full disk must never fail a tool call or add latency. Cursor is fail-open by default but Codex hooks default to a 600 s timeout — a hanging player would be catastrophic there.</p>
+<p><strong>I5. The registry is not a Git repo.</strong> You were right to doubt it. Git storage means: no atomic publish, unbounded repo growth from binary WAVs, clone times that degrade forever, no per-version integrity without extra machinery, and a hard ceiling on write throughput. Git <em>is</em> used — for the spec, schemas, adapters, and CLI source, and for a periodically-exported append-only index snapshot that makes the registry reconstructible if the company disappears. It is not the storage layer.</p>
+<hr>
+<h2>3. Stack</h2>
+<p>Per your call: <strong>Next.js on Vercel + Cloudflare R2.</strong></p>
+<div class="twrap"><table><thead><tr><th>Concern</th><th>Choice</th><th>Notes</th></tr></thead><tbody><tr><td>Web + API</td><td>Next.js (App Router) on Vercel</td><td>Browse UI and registry API in one deploy</td></tr><tr><td>Metadata DB</td><td>Neon Postgres</td><td>Serverless driver over HTTP; connection pooling is otherwise painful on Vercel</td></tr><tr><td>Blob storage</td><td>Cloudflare R2</td><td>Zero egress. Tarballs, WAV assets, previews, peaks</td></tr><tr><td>CDN for artifacts</td><td>R2 public bucket + Cloudflare cache</td><td>Artifacts are immutable → <code>Cache-Control: public, max-age=31536000, immutable</code></td></tr><tr><td>Registry JSON cache</td><td>Vercel Edge Cache + <code>stale-while-revalidate</code></td><td>Packuments are hot and change rarely</td></tr><tr><td>Search</td><td>Postgres FTS (<code>tsvector</code>) for v1</td><td>Fewer moving parts than a search service; revisit past ~50k packages</td></tr><tr><td>Publish endpoint</td><td>Node runtime, not Edge</td><td>Needs <code>node:crypto</code> verify, gzip, and tar parsing</td></tr><tr><td>Queue</td><td>Vercel Cron + a <code>jobs</code> table</td><td>Preview rendering, peak generation, index export. Don't add a broker yet</td></tr></tbody></table></div>
+<p>R2 credentials via S3-compatible API (<code>@aws-sdk/client-s3</code> against the R2 endpoint). Two buckets: <code>tambre-artifacts</code> (public, immutable) and <code>tambre-staging</code> (private, publish scratch + quarantine).</p>
+<hr>
+<h2>4. Concepts</h2>
+<div class="twrap"><table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody><tr><td><strong>Scope</strong></td><td>A publisher namespace, <code>@handle</code>. Owned by a keypair.</td></tr><tr><td><strong>Package</strong></td><td>A named collection under a scope: <code>@nima/denim</code>.</td></tr><tr><td><strong>Version</strong></td><td>An immutable semver release of a package.</td></tr><tr><td><strong>Sound</strong></td><td>One named audible event within a pack. Either <code>sdsl</code> or <code>audio</code>.</td></tr><tr><td><strong>Binding</strong></td><td>A mapping from a canonical event to a sound, with gain/throttle.</td></tr><tr><td><strong>Canonical event</strong></td><td>Agent-neutral lifecycle event name, e.g. <code>tool.pre</code>.</td></tr><tr><td><strong>Adapter</strong></td><td>Translates bindings into one agent's native hook config.</td></tr><tr><td><strong>Profile</strong></td><td>A user's installed selection: pack + agent + overrides.</td></tr></tbody></table></div>
+<p>A publisher can have many packages — that's how collections work. No separate "collection" primitive in v1.</p>
+<hr>
+<h2>5. The sound DSL (<code>sdsl/1</code>)</h2>
+<h3>5.1 Shape</h3>
+<p>A sound is a list of time-offset events. Each event names a generator, a gain, and generator parameters.</p>
+<pre class="code" data-lang="json"><code>{
+  "kind": "sdsl",
+  "events": [
+    { "t": 0.0,  "g": "tap",   "gain": 0.8,
+      "p": { "f": 380, "q": 3.2, "dec": 0.042, "thump": 0.38,
+             "thumpf": 72, "thumpdec": 0.065, "bright": 0.10, "dur": 0.24 } },
+    { "t": 0.09, "g": "tap",   "gain": 1.0,
+      "p": { "f": 494, "q": 3.2, "dec": 0.042, "thump": 0.38,
+             "thumpf": 78, "thumpdec": 0.065, "bright": 0.10, "dur": 0.24 } }
+  ]
+}</code></pre>
+<h3>5.2 Generators</h3>
+<p>Six, and they cover a genuinely wide timbral range (measured spectral centroids from 91 Hz to 5 kHz across the reference packs).</p>
+<div class="twrap"><table><thead><tr><th><code>g</code></th><th>Models</th><th>Required params</th></tr></thead><tbody><tr><td><code>tap</code></td><td>Fingers on denim, knuckles on wood, palm</td><td><code>f</code>, <code>dec</code>, <code>dur</code>; opt <code>q</code>, <code>thump</code>, <code>thumpf</code>, <code>thumpdec</code>, <code>bright</code></td></tr><tr><td><code>modal</code></td><td>Bars, bells, bowls, coins, tines</td><td><code>f0</code>, <code>partials[[ratio,amp,decayMul]]</code>, <code>dec</code>, <code>dur</code>; opt <code>hit</code></td></tr><tr><td><code>pluck</code></td><td>Karplus-Strong string</td><td><code>f0</code>, <code>dur</code>; opt <code>damp</code>, <code>bright</code></td></tr><tr><td><code>tone</code></td><td>Additive sustain — drones, harmonic beds</td><td><code>f0</code>, <code>dur</code>, <code>partials[[ratio,amp]]</code>; opt <code>atk</code>, <code>rel</code>, <code>vib</code>, <code>vibrate</code>, <code>drift</code></td></tr><tr><td><code>blip</code></td><td>Swept oscillator — arcade, water drops, morse</td><td><code>f0</code>, <code>f1</code>, <code>dur</code>, <code>wave</code>(sine|square|tri|saw); opt <code>dec</code></td></tr><tr><td><code>noise</code></td><td>Band-passed noise — paper, breath, shakers</td><td><code>lo</code>, <code>hi</code>, <code>dur</code>; opt <code>atk</code>, <code>dec</code>, <code>curve</code></td></tr></tbody></table></div>
+<h3>5.3 Determinism contract</h3>
+<p>This is the part implementations get wrong. Specify it as a conformance test, not prose.</p>
+<ul><li>Sample rate <strong>44100</strong>, mono, float internally, 16-bit PCM on output.</li><li>PRNG is <strong>mulberry32</strong>, seeded with <strong>FNV-1a 32</strong> over the string <code>"&lt;packageName&gt;@&lt;version&gt;/&lt;soundName&gt;"</code>. One PRNG instance per rendered sound, drawn in event order.</li><li>Band-pass is the <strong>RBJ cookbook biquad</strong>, constant peak gain, coefficients normalised by <code>a0</code>.</li><li>Master chain, in order: <code>× 0.9 × volume</code> → <code>tanh(x × 1.25) × 0.8</code> → trim trailing samples below <code>1.26e-4</code> → 4 ms linear fade-out.</li><li>Ship a <strong>conformance fixture</strong>: 20 reference sounds with SHA-256 of their 16-bit PCM output. Any renderer claiming <code>sdsl/1</code> must match. This is how you keep the browser, the CLI, and any future Rust/Go port honest.</li></ul>
+<h3>5.4 Audio payloads</h3>
+<pre class="code" data-lang="json"><code>{ "kind": "audio", "file": "sounds/stop.wav", "sha256": "…", "peakDb": -6.2 }</code></pre>
+<p>Constraints, enforced at publish:</p>
+<ul><li>WAV (PCM 16/24-bit) or FLAC. No MP3 uploads — lossy in, lossy out.</li><li>≤ 4 s and ≤ 2 MB per sound; ≤ 25 MB per package version.</li><li>Mono or stereo, 44.1 or 48 kHz.</li><li>Must decode cleanly with <code>ffprobe</code>; reject anything with trailing garbage.</li><li>Server transcodes a <strong>48 kbps Opus</strong> preview for browse; the original ships in the tarball for install.</li><li>Loudness-normalise previews to <strong>-23 LUFS</strong> for consistent browsing. Do not normalise the shipped asset — publishers get to decide how loud their own pack is, and the runtime applies user volume anyway.</li></ul>
+<p>Mixed packs are fine: a pack may use <code>sdsl</code> for tool ticks and <code>audio</code> for a recorded chime.</p>
+<hr>
+<h2>6. Canonical events and the adapter layer</h2>
+<h3>6.1 Canonical event set</h3>
+<p>Deliberately small. Every name maps to something at least two of the three target agents actually fire.</p>
+<div class="twrap"><table><thead><tr><th>Canonical</th><th>Meaning</th><th>Typical role</th></tr></thead><tbody><tr><td><code>session.start</code></td><td>Session begins, resumes, or is cleared</td><td>boundary</td></tr><tr><td><code>session.end</code></td><td>Session terminates</td><td>boundary</td></tr><tr><td><code>prompt.submit</code></td><td>User submitted a prompt</td><td>boundary</td></tr><tr><td><code>turn.end</code></td><td>Agent finished its turn</td><td><strong>primary cue</strong></td></tr><tr><td><code>turn.fail</code></td><td>Turn ended in failure</td><td>boundary</td></tr><tr><td><code>tool.pre</code></td><td>Before a tool runs</td><td>churn</td></tr><tr><td><code>tool.post</code></td><td>Tool succeeded</td><td>churn</td></tr><tr><td><code>tool.fail</code></td><td>Tool errored, timed out, or was denied</td><td>churn</td></tr><tr><td><code>permission.request</code></td><td>Agent is waiting on human approval</td><td><strong>primary cue</strong></td></tr><tr><td><code>permission.denied</code></td><td>A call was blocked</td><td>churn</td></tr><tr><td><code>notification</code></td><td>Agent raised a notification</td><td>cue</td></tr><tr><td><code>subagent.start</code></td><td>Subagent spawned</td><td>churn</td></tr><tr><td><code>subagent.end</code></td><td>Subagent finished</td><td>churn</td></tr><tr><td><code>compact.pre</code></td><td>About to compact context</td><td>boundary</td></tr><tr><td><code>compact.post</code></td><td>Compaction finished</td><td>boundary</td></tr><tr><td><code>file.edit</code></td><td>Agent edited a file</td><td>churn</td></tr></tbody></table></div>
+<p><code>role</code> is not decorative — the runtime uses it for default gain staging and throttle policy (§10.3).</p>
+<h3>6.2 Support matrix</h3>
+<p>Grounded in the current docs and source for each agent as of 2026-08-08. Encode this as <strong>data</strong> (<code>adapters/*/support.json</code>), serve it from <code>GET /api/v1/events</code>, and let CLIs refresh it — do not hardcode it in three places.</p>
+<div class="twrap"><table><thead><tr><th>Canonical</th><th>Claude Code</th><th>Codex CLI</th><th>Cursor</th></tr></thead><tbody><tr><td><code>session.start</code></td><td><code>SessionStart</code></td><td><code>SessionStart</code></td><td><code>sessionStart</code> ¹</td></tr><tr><td><code>session.end</code></td><td><code>SessionEnd</code></td><td><code>SessionEnd</code> ²</td><td><code>sessionEnd</code> ¹</td></tr><tr><td><code>prompt.submit</code></td><td><code>UserPromptSubmit</code></td><td><code>UserPromptSubmit</code></td><td><code>beforeSubmitPrompt</code></td></tr><tr><td><code>turn.end</code></td><td><code>Stop</code></td><td><code>Stop</code></td><td><code>stop</code></td></tr><tr><td><code>turn.fail</code></td><td><code>StopFailure</code> ³</td><td>— (fold into <code>Stop</code>)</td><td>—</td></tr><tr><td><code>tool.pre</code></td><td><code>PreToolUse</code></td><td><code>PreToolUse</code></td><td><code>preToolUse</code></td></tr><tr><td><code>tool.post</code></td><td><code>PostToolUse</code></td><td><code>PostToolUse</code></td><td><code>postToolUse</code></td></tr><tr><td><code>tool.fail</code></td><td><code>PostToolUseFailure</code> ³</td><td><code>PostToolUse</code> (non-zero exit)</td><td><code>postToolUseFailure</code></td></tr><tr><td><code>permission.request</code></td><td><code>PermissionRequest</code></td><td><code>PermissionRequest</code></td><td><strong>unsupported</strong></td></tr><tr><td><code>permission.denied</code></td><td><code>PermissionDenied</code> ³</td><td>—</td><td>—</td></tr><tr><td><code>notification</code></td><td><code>Notification</code></td><td>—</td><td>—</td></tr><tr><td><code>subagent.start</code></td><td><code>SubagentStart</code> ³</td><td><code>SubagentStart</code></td><td><code>subagentStart</code></td></tr><tr><td><code>subagent.end</code></td><td><code>SubagentStop</code></td><td><code>SubagentStop</code></td><td><code>subagentStop</code></td></tr><tr><td><code>compact.pre</code></td><td><code>PreCompact</code></td><td><code>PreCompact</code></td><td><code>preCompact</code></td></tr><tr><td><code>compact.post</code></td><td><code>PostCompact</code> ³</td><td><code>PostCompact</code></td><td>—</td></tr><tr><td><code>file.edit</code></td><td>—</td><td>—</td><td><code>afterFileEdit</code></td></tr></tbody></table></div>
+<p>¹ Not available to Cursor <strong>cloud</strong> agents (no home dir on the VM). ² Codex <code>SessionEnd</code> timeout defaults to <strong>1 s, capped at 3 s</strong> — the player must already be detached by then. It also never fires for subagents. ³ Verified less rigorously than the rest; these came partly from secondary sources during research. <strong>Confirm against Claude Code's own docs before shipping</strong>, and treat unrecognised keys as harmless (all three agents ignore hook names they don't know).</p>
+<h3>6.3 Binding fallback</h3>
+<p>Because coverage is ragged, every binding may declare a fallback chain. The adapter walks it and uses the first canonical event the target agent supports.</p>
+<pre class="code" data-lang="json"><code>"bindings": {
+  "permission.request": {
+    "sound": "chime-rising",
+    "gain": 1.0,
+    "fallback": ["notification", "turn.end"]
+  }
+}</code></pre>
+<p>The registry computes and displays per-agent coverage from <code>bindings × support.json</code> — the browse UI shows <code>Claude 16/16 · Codex 13/16 · Cursor 12/16</code> on every card. Publishers get this for free; they never declare agent support by hand.</p>
+<h3>6.4 Adapter contract</h3>
+<pre class="code" data-lang="ts"><code>interface Adapter {
+  id: 'claude-code' | 'codex' | 'cursor';
+  displayName: string;
+  supports: Record&lt;CanonicalEvent, NativeEventSpec | null&gt;;
+
+  /** Where config lives for a given scope. */
+  configPaths(scope: 'user' | 'project'): { path: string; format: 'json' | 'toml' };
+
+  /** Pure function: bindings -&gt; a patch to merge into native config. */
+  plan(input: {
+    pack: Manifest;
+    soundDir: string;      // absolute
+    playerPath: string;    // absolute
+    scope: 'user' | 'project';
+  }): ConfigPatch;
+
+  /** Merge a patch without clobbering the user's own hooks. */
+  apply(patch: ConfigPatch, existing: unknown): unknown;
+
+  /** Remove only entries this tool created. Must be exact. */
+  revert(existing: unknown): unknown;
+
+  /** Human-readable steps we cannot perform programmatically. */
+  postInstallNotes(patch: ConfigPatch): string[];
+}</code></pre>
+<p>Ownership marker: every command string this tool writes contains the literal <code>TAMBRE_HOOK=1</code> as an env prefix. <code>revert</code> removes exactly the entries carrying it and nothing else. This is the single mechanism that makes uninstall safe, and it is already proven in the reference implementation.</p>
+<h3>6.5 Per-adapter notes the implementer must handle</h3>
+<p><strong>Claude Code</strong> — <code>~/.claude/settings.json</code>, <code>.claude/settings.json</code>, <code>.claude/settings.local.json</code>. Shape: <code>hooks: { &lt;Event&gt;: [ { matcher?, hooks: [{ type: "command", command }] } ] }</code>. Back the file up before writing. Straightforward; this is the reference adapter.</p>
+<p><strong>Codex CLI</strong> — <code>~/.codex/hooks.json</code> or an inline <code>[hooks]</code> table in <code>~/.codex/config.toml</code>; project-level <code>.codex/hooks.json</code> also works. Two traps:</p>
+<ul><li><strong>Hook trust.</strong> Non-managed command hooks are hashed and <em>skipped until a human reviews and trusts them</em> via <code>/hooks</code> in the CLI. Editing a hook invalidates trust. So <code>tambre install --agent codex</code> <strong>cannot</strong> be fully automatic. The adapter must write the config and then print an explicit "now run <code>/hooks</code> in Codex and trust these entries" instruction, and <code>tambre doctor</code> must be able to detect the untrusted state. Do not paper over this; a silent no-op install is the worst possible outcome.</li><li>**<code>notify</code> is a usable fallback.** The legacy <code>notify = ["cmd", "args"]</code> top-level key needs no trust review and fires on <code>agent-turn-complete</code> only. It receives its JSON as an <strong>appended argv token</strong>, not stdin. Offer it as <code>--minimal</code> for users who just want a turn-end sound with zero ceremony. Note it is ignored in project-local config and must be set at user level.</li></ul>
+<p><strong>Cursor</strong> — <code>~/.cursor/hooks.json</code> or <code>&lt;project&gt;/.cursor/hooks.json</code>. Traps:</p>
+<ul><li>Relative <code>command</code> paths resolve against **<code>~/.cursor/</code><strong> for user hooks but the </strong>project root** for project hooks. Always write absolute paths and sidestep this entirely.</li><li>Hooks are <strong>fail-open</strong> by default; keep <code>failClosed</code> unset.</li><li>Cursor can also read <code>.claude/settings.json</code> hooks when third-party configs are enabled. If a user has both Claude and Cursor adapters installed, they may get <strong>double sounds</strong>. <code>tambre doctor</code> must detect this overlap and offer to disable one.</li><li><code>permission.request</code> has no Cursor equivalent — the fallback chain earns its keep here.</li></ul>
+<hr>
+<h2>7. Package format</h2>
+<h3>7.1 Tarball</h3>
+<p><code>.tgz</code>, gzip, deterministic ordering, no symlinks, no absolute paths, no dotfiles outside <code>sounds/</code>. Max 25 MB.</p>
+<pre class="code"><code>tambre.json            # manifest, required
+README.md             # optional, rendered on the package page
+LICENSE               # optional
+sounds/*.wav          # only for audio-kind sounds</code></pre>
+<p>Reject at publish: any path traversal, any entry type other than file, any file not referenced by the manifest, total uncompressed size &gt; 60 MB (zip-bomb guard).</p>
+<h3>7.2 Manifest (<code>tambre.json</code>)</h3>
+<pre class="code" data-lang="json"><code>{
+  "spec": "tambre/1",
+  "name": "@nima/denim",
+  "version": "1.2.0",
+  "title": "Denim",
+  "description": "One fingertip on denim over a thigh. Counts and weights carry the meaning instead of pitch.",
+  "license": "CC0-1.0",
+  "homepage": "https://github.com/nima/tambre-denim",
+  "tags": ["tactile", "dry", "quiet", "non-pitched"],
+  "approach": "tactile",
+  "engine": { "sdsl": "^1.0.0" },
+  "defaults": { "volume": 0.8, "polyphony": 6 },
+
+  "sounds": {
+    "tap-1": { "kind": "sdsl", "events": [ … ] },
+    "tap-2": { "kind": "sdsl", "events": [ … ] },
+    "thud":  { "kind": "audio", "file": "sounds/thud.wav", "sha256": "…" }
+  },
+
+  "bindings": {
+    "turn.end":           { "sound": "tap-2", "gain": 1.00 },
+    "permission.request": { "sound": "tap-2", "gain": 1.00, "fallback": ["notification"] },
+    "tool.pre":           { "sound": "tap-1", "gain": 0.20, "throttle": 120 },
+    "tool.post":          { "sound": "tap-1", "gain": 0.16, "throttle": 120 },
+    "tool.fail":          { "sound": "thud",  "gain": 0.55 }
+  }
+}</code></pre>
+<p>Field rules:</p>
+<ul><li><code>name</code> — <code>@scope/name</code>, both <code>[a-z0-9][a-z0-9-]{1,38}</code>. Lowercase only.</li><li><code>version</code> — strict semver. No ranges, no build metadata in the published tag.</li><li><code>approach</code> — <code>tactile | jingle | bed | hybrid</code>. Drives browse facets.</li><li><code>license</code> — SPDX identifier. Required. Default the CLI scaffold to <code>CC0-1.0</code>.</li><li><code>bindings[event].throttle</code> — minimum ms between plays of this binding.</li><li>Unknown top-level keys are <strong>rejected</strong>, not ignored. Cheap forward-compat discipline while the spec is young.</li></ul>
+<p>Publish the JSON Schema at <code>https://tambre.dev/schema/tambre-1.json</code> and validate both client-side (CLI, pre-flight) and server-side (authoritative).</p>
+<hr>
+<h2>8. Identity and auth — agent-only</h2>
+<p>You asked for an auth system agents can use without a human in the loop. That rules out OAuth. The design below is keypair-first: <strong>an agent can claim a scope and publish with no human account, no email, and no browser.</strong></p>
+<h3>8.1 Model</h3>
+<ul><li>Publisher identity <strong>is</strong> an Ed25519 keypair. The agent generates it locally (<code>tambre key new</code>), stores the private key at <code>~/.tambre/keys/&lt;fingerprint&gt;.jwk</code> with <code>0600</code>, and never transmits it.</li><li>A <strong>scope</strong> is claimed by the first key to successfully register it. The scope record stores the public key and a fingerprint (<code>base32(sha256(pubkey))[..16]</code>).</li><li>Every mutating request carries a detached signature over a canonical request digest.</li></ul>
+<h3>8.2 Publish request signing</h3>
+<pre class="code"><code>digest = SHA256(
+  "tambre-publish/1\n" +
+  name + "\n" + version + "\n" +
+  hex(sha256(tarball)) + "\n" +
+  issuedAt_iso8601 + "\n" +
+  nonce
+)
+signature = Ed25519-Sign(privateKey, digest)</code></pre>
+<p>Sent as headers: <code>X-Tambre-Key</code>, <code>X-Tambre-Sig</code>, <code>X-Tambre-Issued-At</code>, <code>X-Tambre-Nonce</code>. Server rejects <code>issuedAt</code> skew &gt; 300 s and replays a nonce it has seen in the last hour (store nonces in Postgres with a TTL index; this is low volume).</p>
+<h3>8.3 Scope claiming and spam resistance</h3>
+<p>With no human identity there is no free spam gate, so buy it with compute and throttles:</p>
+<ol><li><strong>Proof of work on scope claim.</strong> <code>POST /api/v1/scopes/challenge</code> returns a random challenge and a difficulty. Client finds <code>nonce</code> such that <code>sha256(challenge || pubkey || nonce)</code> has N leading zero bits. Tune N to ~20–40 s of single-core work. Negligible for a real publisher, brutal for someone claiming 10,000 scopes. Difficulty is a server-side config value — raise it under attack.</li><li><strong>Rate limits.</strong> Per key: 10 versions/hour, 50/day. Per IP: 3 scope claims/day. Per scope: 1 new package/hour for the first week of the scope's life.</li><li><strong>Trust tiers</strong>, stored on the scope:</li><li><code>unverified</code> (default) — reachable by direct link and by search with an explicit toggle; excluded from the default browse feed and from any "featured"/"popular" surface.</li><li><code>attested</code> — the key holder proved control of a GitHub account or a domain by publishing the fingerprint in a gist or a DNS TXT record. Fully automatable by an agent, still no OAuth. Promotes into the default feed.</li><li><code>curated</code> — a maintainer marked it. Eligible for the homepage.</li><li><strong>Content is inert</strong> (I1), so the blast radius of spam is a bad browse experience, not a security incident. Bias toward openness.</li></ol>
+<h3>8.4 Key rotation and loss</h3>
+<ul><li><code>POST /api/v1/scopes/:scope/rotate</code> — body signed by the <strong>current</strong> key, contains the new public key. Old key is retired, kept in an audit table.</li><li><strong>Key loss without attestation is unrecoverable.</strong> State this in the CLI at key-creation time in plain language. Offer <code>tambre key backup</code> which writes an encrypted export and tells the agent to persist it somewhere durable.</li><li>Attested scopes <em>can</em> recover by re-proving the GitHub/DNS control. This is the strongest practical argument for attestation and the CLI should say so.</li></ul>
+<h3>8.5 Human surface</h3>
+<p>The website is <strong>read-only</strong>. There is no sign-up, no login, no dashboard. A human who wants to publish runs the CLI (or asks their agent to). This removes an entire category of work — sessions, password reset, email deliverability, account recovery, GDPR account deletion — from v1.</p>
+<p>Maintainer actions (curate, takedown) go through a separate admin path gated by a static allowlist of maintainer public keys. Same signing scheme, different table.</p>
+<hr>
+<h2>9. Storage and data model</h2>
+<h3>9.1 R2 layout</h3>
+<pre class="code"><code>tambre-artifacts/
+  pkg/&lt;scope&gt;/&lt;name&gt;/&lt;version&gt;/package.tgz          # immutable
+  pkg/&lt;scope&gt;/&lt;name&gt;/&lt;version&gt;/tambre.json           # extracted, for fast reads
+  prev/&lt;scope&gt;/&lt;name&gt;/&lt;version&gt;/&lt;sound&gt;.opus        # audio-kind previews only
+  prev/&lt;scope&gt;/&lt;name&gt;/&lt;version&gt;/&lt;sound&gt;.peaks.json  # waveform peaks, all sounds
+  index/snapshot-&lt;iso8601&gt;.jsonl.gz                 # nightly export</code></pre>
+<p><code>Cache-Control: public, max-age=31536000, immutable</code> on everything under <code>pkg/</code> and <code>prev/</code>. Never overwrite a key; a failed publish leaves orphans in <code>tambre-staging</code> that a cron sweeps after 24 h.</p>
+<p><strong>Preview cost note:</strong> <code>sdsl</code> packs render client-side in the browser, so they need no audio in R2 at all — only the small <code>peaks.json</code> for waveform display. Only <code>audio</code>-kind sounds get an Opus preview. This keeps storage close to zero for the majority of packs and is a real argument for DSL-first authoring.</p>
+<h3>9.2 Postgres schema (essentials)</h3>
+<pre class="code" data-lang="sql"><code>create table scopes (
+  handle          text primary key,
+  public_key      bytea not null,
+  fingerprint     text unique not null,
+  trust           text not null default 'unverified',   -- unverified|attested|curated
+  attestation     jsonb,
+  created_at      timestamptz not null default now()
+);
+
+create table packages (
+  id              bigserial primary key,
+  scope           text not null references scopes(handle),
+  name            text not null,
+  latest_version  text,
+  approach        text not null,
+  tags            text[] not null default '{}',
+  install_count   bigint not null default 0,
+  play_count      bigint not null default 0,
+  deprecated      text,
+  search          tsvector generated always as (
+                    setweight(to_tsvector('english', coalesce(name,'')), 'A') ||
+                    setweight(to_tsvector('english', coalesce(array_to_string(tags,' '),'')), 'B')
+                  ) stored,
+  created_at      timestamptz not null default now(),
+  unique (scope, name)
+);
+
+create table versions (
+  id              bigserial primary key,
+  package_id      bigint not null references packages(id),
+  version         text not null,
+  manifest        jsonb not null,
+  tarball_sha256  text not null,
+  tarball_bytes   int not null,
+  coverage        jsonb not null,     -- {"claude-code":16,"codex":13,"cursor":12}
+  sound_count     int not null,
+  yanked_reason   text,
+  published_at    timestamptz not null default now(),
+  unique (package_id, version)
+);
+
+create index on versions using gin (manifest jsonb_path_ops);
+create index on packages using gin (search);</code></pre>
+<p>Counters (<code>install_count</code>, <code>play_count</code>) are advisory and updated from a <code>jobs</code>-batched aggregate — never in the hot path.</p>
+<h3>9.3 The Git repo</h3>
+<p><code>github.com/tambre-dev/tambre</code> is the project, not the storage:</p>
+<pre class="code"><code>/spec               this document + JSON Schemas + the sdsl conformance fixtures
+/packages/core      shared TS: manifest types, sdsl renderer, canonical events
+/packages/cli       the tambre CLI
+/adapters/*         one dir per agent: support.json + plan/apply/revert + tests
+/apps/web           Next.js app
+/apps/api           route handlers (co-located with web on Vercel)
+/examples           reference packs, including the 30 that already exist</code></pre>
+<p>Nightly, export <code>index/snapshot-*.jsonl.gz</code> to R2 and mirror it to a <code>tambre-dev/index</code> Git repo — one line per version, with digests. That gives you a credible "the registry is reconstructible without us" story at negligible cost, without pretending Git is a database.</p>
+<hr>
+<h2>10. Runtime</h2>
+<h3>10.1 Layout on the user's machine</h3>
+<pre class="code"><code>~/.tambre/
+  bin/tambre-play           # the only executable, installed once
+  packs/&lt;scope&gt;/&lt;name&gt;/&lt;version&gt;/&lt;event&gt;.wav
+  profiles.json            # what is installed, per agent
+  keys/                    # publisher keys, 0600</code></pre>
+<p>Packs are pre-rendered to WAV at install time. Nothing is synthesised at play time — that would add latency and a runtime dependency for no benefit.</p>
+<h3>10.2 Player</h3>
+<p>One script, ~30 lines, already proven. Resolves a player in order <code>afplay → paplay → aplay → ffplay → sox</code>, spawns detached, exits 0 unconditionally. Windows gets a <code>.ps1</code> sibling using <code>System.Media.SoundPlayer</code>. If no player is found it exits 0 silently — <strong>never</strong> print to stderr, since Codex and Cursor surface hook stderr to the user.</p>
+<h3>10.3 Gain staging and throttling</h3>
+<p>The single biggest determinant of whether this is pleasant or maddening. Bake the policy into the runtime so pack authors can't get it catastrophically wrong:</p>
+<ul><li>Default gain by role: <code>boundary</code> 1.0, <code>cue</code> 0.9, <code>churn</code> 0.2.</li><li>Default throttle by role: <code>churn</code> 120 ms, everything else 0.</li><li><code>polyphony</code> cap (default 6) — drop the oldest if exceeded.</li><li>Publish-time lint (<code>tambre lint</code>) <strong>warns</strong> when a <code>churn</code> binding is within 6 dB of a <code>boundary</code> binding in the same pack. Warn, don't block; the <code>bed</code> approach deliberately flattens dynamics.</li></ul>
+<hr>
+<h2>11. CLI</h2>
+<pre class="code"><code>tambre search &lt;query&gt; [--approach] [--agent] [--tag]
+tambre info @scope/name[@version]
+tambre preview @scope/name [--event turn.end]   # renders + plays locally
+tambre install @scope/name[@version] [--agent claude-code|codex|cursor|all]
+                                    [--scope user|project] [--volume 0.8]
+tambre uninstall [--agent …]
+tambre list                                     # what's installed where
+tambre doctor                                   # diagnose: trust, overlap, no player
+
+tambre init                                     # scaffold a pack
+tambre lint [path]
+tambre render [path] --out ./wav
+tambre key new | tambre key backup | tambre key show
+tambre scope claim @handle                      # runs the PoW
+tambre scope attest @handle --github &lt;user&gt;     # or --domain
+tambre publish [path] [--tag next]
+tambre yank @scope/name@version --reason "…"</code></pre>
+<p><code>install --agent all</code> is the common case and should be the thing the docs lead with. It must print a per-agent result table including anything it could not do automatically (Codex trust, above).</p>
+<p>Ship as a single npm package with a <code>bin</code>, plus a <code>curl | sh</code> installer that fetches a prebuilt binary. Agents will mostly invoke <code>npx tambre …</code>.</p>
+<hr>
+<h2>12. Web app</h2>
+<p>Read-only, minimalist, Pinterest-shaped. Four routes.</p>
+<p>**<code>/</code> — the feed.<strong> Masonry grid of pack cards. Each card: pack name, scope, approach chip, per-agent coverage, and a </strong>waveform strip** rendered from <code>peaks.json</code>. Hover (desktop) or tap (mobile) plays the pack's <code>turn.end</code> sound immediately — <code>sdsl</code> renders in a Web Audio worklet, <code>audio</code> streams the Opus. No autoplay, no sound until a gesture. Infinite scroll. Filter rail: approach, agent, tag, trust tier. Sort: newest, most installed, most played.</p>
+<p>**<code>/@scope/name</code> — the pack page.** Full sound table with per-event play buttons and waveforms, the binding map, per-agent coverage detail, README, version history, and a copy-ready install command. This is essentially the artifact already built for the Claude packs — reuse its layout and its renderer wholesale.</p>
+<p>**<code>/@scope</code> — the publisher page.** Their packs. That's the collection view.</p>
+<p>**<code>/docs</code>** — the spec, the DSL reference, adapter notes, publishing guide.</p>
+<p>Design constraints: system font stack, one accent colour, no shadows deeper than 2 px, no gradients, generous whitespace, waveforms as the only ornament. Light mode primary. The sound is the product; the UI should get out of its way.</p>
+<p>Performance: the feed must be usable on a cold cache in under 1 s. Serve card data from an edge-cached JSON endpoint, lazy-load peaks, and never block first paint on audio.</p>
+<hr>
+<h2>13. Moderation and abuse</h2>
+<ul><li><strong>Automated at publish:</strong> schema validation, tarball safety, audio decode check, manifest/asset digest match, rate limits, PoW on scope claim.</li><li><strong>Reactive:</strong> a <code>POST /api/v1/reports</code> endpoint (unauthenticated, rate-limited) and a maintainer queue. Grounds for takedown: copyright, malicious loudness (a version whose peak exceeds -1 dBFS after the limiter — auto-flag), scope impersonation, illegal content.</li><li><strong>Yank ≠ delete.</strong> Yanked versions stop resolving for new installs but existing lockfiles keep working. Full deletion only for legal necessity, and it leaves a tombstone.</li><li><strong>Loudness is a safety issue here</strong>, not an aesthetic one — people wear headphones. The soft-knee limiter in the render chain is mandatory and server-verified: reject any published <code>audio</code> asset whose true peak exceeds -1 dBFS.</li></ul>
+<hr>
+<h2>14. Milestones</h2>
+<div class="twrap"><table><thead><tr><th>#</th><th>Deliverable</th><th>Done when</th></tr></thead><tbody><tr><td><strong>M0</strong></td><td>Spec + JSON Schema + sdsl conformance fixtures</td><td>20 reference sounds hash-match across two independent renderers</td></tr><tr><td><strong>M1</strong></td><td><code>core</code> + CLI: init, lint, render, preview, install for Claude Code</td><td>The 30 existing packs install and uninstall cleanly, round-trip verified</td></tr><tr><td><strong>M2</strong></td><td>Registry read path</td><td>Publish by hand into R2/Postgres; <code>tambre install @scope/name</code> resolves from the network</td></tr><tr><td><strong>M3</strong></td><td>Publish path + agent auth</td><td>Keypair, PoW scope claim, signed publish, immutability enforced</td></tr><tr><td><strong>M4</strong></td><td>Web feed + pack page</td><td>Browse, filter, hover-to-play, copy install command</td></tr><tr><td><strong>M5</strong></td><td>Codex + Cursor adapters</td><td>Coverage matrix live; <code>install --agent all</code>; <code>doctor</code> detects Codex trust and Claude/Cursor overlap</td></tr><tr><td><strong>M6</strong></td><td>Trust tiers, attestation, reports, index export</td><td>Attestation via GitHub gist and DNS TXT both work end to end</td></tr></tbody></table></div>
+<p>M1 is shippable on its own as a CLI with a bundled pack set — do that first and get it in front of people before building the registry.</p>
+<hr>
+<h2>15. Open questions</h2>
+<ol><li><strong>Does the throttle belong in the pack or the profile?</strong> Spec'd as both (pack default, user override). If that proves confusing, the pack should win and the user override should be a single global "quiet mode".</li><li><strong>Semver ranges on install.</strong> v1 pins exact versions in <code>profiles.json</code>. Adding <code>^</code> ranges means re-rendering WAVs on update — probably worth it later, definitely not now.</li><li>**Should <code>file.edit</code> stay canonical?** Only Cursor fires it. Keeping it costs nothing and it's the most-requested "I want to hear the agent typing" event.</li><li><strong>Attestation via DNS TXT for agents without a GitHub account</strong> — is this actually reachable for a headless agent, or does it always imply a human with registrar access? May need a third method.</li><li><strong>Claude Code's rarer hook names</strong> (<code>StopFailure</code>, <code>PermissionDenied</code>, <code>SubagentStart</code>, <code>PostCompact</code>) need first-party confirmation before M5. They are in the matrix flagged; verify, don't assume.</li></ol>
+</main>
+<footer class="sitefoot">
+  <a href="../index.html">← Library</a>
+  <span>Tambre — an open registry for AI agent sound packs</span>
+</footer>
+</body>
+</html>

@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Tambre Register — an open catalogue of sound packs for coding agents</title>
+<style>
+/* ============================================================
+   TAMBRE — variant 02 "Broadsheet"
+   Metaphor: a printed catalogue page. Rules, columns, type.
+   Light paper ground only. No shadows, gradients, radii, fills.
+   ============================================================ */
+
+:root{
+  --paper:#f4f1ea;
+  --paper-2:#efebe1;
+  --ink:#14120e;
+  --ink-2:#4a463c;
+  --ink-3:#7c7566;
+  --red:#a3201a;
+
+  --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
+  --text:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --label:Georgia,"Times New Roman",serif;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--text);
+  font-size:15px;
+  line-height:1.46;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+::selection{background:var(--ink);color:var(--paper);}
+
+.sheet{max-width:1200px;margin:0 auto;padding:26px 30px 90px;}
+
+/* ---------- rules ---------- */
+.r-hair{border:0;border-top:1px solid var(--ink);margin:0;}
+.r-med{border:0;border-top:2px solid var(--ink);margin:0;}
+.r-heavy{border:0;border-top:6px solid var(--ink);margin:0;}
+.r-double{border:0;border-top:3px solid var(--ink);border-bottom:1px solid var(--ink);height:4px;margin:0;}
+
+/* ---------- labels / small caps ---------- */
+.lbl{
+  font-family:var(--label);
+  font-size:9.5px;
+  font-weight:700;
+  letter-spacing:.19em;
+  text-transform:uppercase;
+  color:var(--ink-2);
+}
+.fig{font-family:Georgia,serif;font-variant-numeric:oldstyle-nums;font-feature-settings:"onum" 1,"pnum" 1;}
+
+/* ---------- masthead ---------- */
+.masthead{padding-top:2px;}
+.masthead h1{
+  font-family:var(--display);
+  font-weight:400;
+  font-size:clamp(46px,9vw,104px);
+  line-height:.92;
+  letter-spacing:.02em;
+  margin:14px 0 8px;
+  text-align:center;
+  text-transform:uppercase;
+}
+.masthead h1 .thin{font-size:.34em;letter-spacing:.34em;display:block;margin-bottom:.5em;font-weight:400;}
+.mast-meta{
+  display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 22px;
+  padding:6px 0 7px;
+}
+.mast-meta span{white-space:nowrap;}
+
+/* ---------- standing matter (3 short columns under the masthead) ---------- */
+.standing{
+  display:grid;
+  grid-template-columns:1.5fr 1fr 1.1fr;
+  gap:0;
+  border-bottom:2px solid var(--ink);
+}
+.standing > div{padding:14px 20px 16px;border-left:1px solid var(--ink);}
+.standing > div:first-child{border-left:0;padding-left:0;}
+.standing > div:last-child{padding-right:0;}
+.standing h2{font-family:var(--display);font-size:15px;font-weight:400;margin:0 0 7px;letter-spacing:.02em;}
+.standing p{margin:0 0 8px;font-size:13.5px;line-height:1.5;}
+.standing p:last-child{margin-bottom:0;}
+.lede{font-size:14.5px;}
+.lede .drop{
+  float:left;font-family:var(--display);font-size:56px;line-height:.78;
+  padding:5px 7px 0 0;font-weight:400;
+}
+
+/* key to the marks */
+.key dl{margin:0;font-size:12.5px;}
+.key dt{display:inline;font-weight:400;}
+.key dd{display:inline;margin:0 0 0 6px;color:var(--ink-2);}
+.key div{margin-bottom:4px;}
+
+/* press notice / gesture gate */
+.press{}
+.press .notice{
+  border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);
+  padding:8px 0;margin-top:2px;
+}
+.press p{font-size:13px;}
+.press .cold-em{font-style:italic;}
+body[data-press="cold"] .press.hinted p.gate-line{text-decoration:underline;}
+.ink-btn{
+  font-family:var(--display);font-size:19px;background:none;border:0;padding:0;
+  color:var(--ink);cursor:pointer;letter-spacing:.04em;text-transform:uppercase;
+  border-bottom:3px solid var(--ink);
+}
+.ink-btn:hover{color:var(--red);border-bottom-color:var(--red);}
+.ink-btn:focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+body[data-press="inked"] .press-cold{display:none;}
+body[data-press="cold"] .press-warm{display:none;}
+.press-warm .lbl-red{color:var(--red);}
+
+/* ---------- index bar (filters + sort) ---------- */
+.indexbar{padding:12px 0 4px;border-bottom:2px solid var(--ink);}
+.frow{display:grid;grid-template-columns:118px 1fr;gap:0 14px;align-items:baseline;padding:5px 0;border-top:1px solid var(--ink);}
+.frow:first-child{border-top:0;}
+.frow .lbl{padding-top:2px;}
+.opts{display:flex;flex-wrap:wrap;gap:0 3px;}
+.opt{
+  font-family:var(--text);font-size:13px;background:none;border:0;padding:1px 7px 2px;
+  color:var(--ink-2);cursor:pointer;border-bottom:2px solid transparent;
+  font-variant-numeric:oldstyle-nums;
+}
+.opt:hover{color:var(--ink);border-bottom-color:var(--ink-3);}
+.opt[aria-pressed="true"],.opt[aria-current="true"]{
+  color:var(--ink);font-weight:700;border-bottom:3px solid var(--ink);
+}
+.opt:focus-visible{outline:1px solid var(--red);outline-offset:1px;}
+.opt .sub{font-size:10.5px;color:var(--ink-3);}
+.opt.tiny{font-size:12px;}
+
+/* withheld notice */
+.withheld{
+  padding:9px 0;border-bottom:2px solid var(--ink);
+  font-size:13px;font-style:italic;color:var(--ink-2);
+  display:flex;gap:12px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;
+}
+.withheld button{
+  font-family:var(--text);font-style:normal;font-size:12px;background:none;border:0;
+  border-bottom:2px solid var(--ink);color:var(--ink);cursor:pointer;padding:0 1px 1px;
+  letter-spacing:.06em;text-transform:uppercase;
+}
+.withheld button:hover{color:var(--red);border-bottom-color:var(--red);}
+
+/* count line */
+.tally{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:8px 0 12px;border-bottom:3px solid var(--ink);}
+
+/* ---------- the columns ---------- */
+.columns{
+  column-count:3;
+  column-gap:32px;
+  column-rule:1px solid var(--ink);
+  padding-top:16px;
+}
+@media (max-width:1000px){ .columns{column-count:2;} .standing{grid-template-columns:1fr 1fr;} .standing > div:nth-child(3){grid-column:1 / -1;border-left:0;padding-left:0;border-top:1px solid var(--ink);} }
+@media (max-width:660px){ .columns{column-count:1;} .standing{grid-template-columns:1fr;} .standing > div{border-left:0;padding-left:0;padding-right:0;border-top:1px solid var(--ink);} .standing > div:first-child{border-top:0;} .frow{grid-template-columns:1fr;} }
+
+/* ---------- an entry ---------- */
+.entry{
+  break-inside:avoid;
+  page-break-inside:avoid;
+  padding-bottom:13px;
+  margin-bottom:15px;
+  border-bottom:1px solid var(--ink);
+}
+.entry:last-child{border-bottom:0;}
+.entry-no{
+  float:left;font-family:var(--display);font-size:24px;line-height:.92;
+  margin:2px 8px 0 0;color:var(--ink);font-variant-numeric:oldstyle-nums;
+}
+.entry-title{
+  font-family:var(--display);font-weight:400;font-size:23px;line-height:1.06;
+  margin:0 0 3px;letter-spacing:0;
+  hyphens:auto;-webkit-hyphens:auto;overflow-wrap:break-word;
+}
+.entry-title.long{font-size:19px;line-height:1.08;}
+.entry-sub{font-size:12.5px;color:var(--ink-2);margin:0 0 7px;clear:both;}
+.entry-sub .scope{font-style:italic;}
+.entry-sub .app{text-transform:uppercase;letter-spacing:.14em;font-size:10px;font-weight:700;}
+.mark-wrap{margin:0 0 8px;}
+.entry-desc{margin:0 0 7px;font-size:13.5px;line-height:1.48;}
+.entry-desc .trust{
+  font-variant:small-caps;letter-spacing:.06em;font-weight:700;
+}
+.entry-desc .trust.unverified{font-variant:small-caps;font-style:italic;font-weight:400;color:var(--ink-2);}
+.stats{font-size:12px;color:var(--ink-2);margin:0 0 6px;}
+.stats b{font-weight:700;color:var(--ink);}
+
+/* coverage line */
+.cov{
+  display:flex;gap:0 14px;flex-wrap:wrap;font-size:12px;
+  padding:4px 0;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);margin:0 0 8px;
+}
+.cov i{font-style:normal;}
+.cov .ag{letter-spacing:.16em;text-transform:uppercase;font-size:9.5px;font-weight:700;color:var(--ink-2);}
+.cov .n{font-variant-numeric:oldstyle-nums;font-size:13px;}
+.cov sup{font-size:9.5px;color:var(--ink-2);}
+
+/* the hook index — set-in-type, each row hover-playable */
+.hooks{margin:0 0 8px;}
+.hooks-cap{
+  font-family:var(--label);font-size:9px;font-weight:700;letter-spacing:.17em;
+  text-transform:uppercase;color:var(--ink-2);padding-bottom:3px;
+  border-bottom:2px solid var(--ink);margin-bottom:1px;
+  display:flex;justify-content:space-between;gap:8px;
+}
+.hook{
+  display:grid;
+  grid-template-columns:9px minmax(0,1fr) 30px 30px 38px;
+  align-items:baseline;
+  gap:0 4px;
+  width:100%;
+  text-align:left;
+  background:none;border:0;border-bottom:1px solid rgba(20,18,14,.28);
+  padding:3px 0 3px 0;
+  font-family:var(--text);color:var(--ink);cursor:pointer;
+}
+.hook:hover{border-bottom-color:var(--ink);}
+.hook:hover .ev{text-decoration:underline;text-underline-offset:2px;}
+.hook:hover .caret{background:var(--ink);}
+.hook:focus-visible{outline:1px solid var(--red);outline-offset:1px;}
+.caret{display:inline-block;width:4px;height:11px;background:none;}
+.hook.is-live .caret{background:var(--red);}
+.hook.is-live .ev{color:var(--red);}
+.hook.is-live{border-bottom-color:var(--red);}
+.ev{
+  font-size:11px;letter-spacing:.055em;text-transform:uppercase;font-weight:700;
+  line-height:1.28;
+}
+.sn{font-style:italic;font-weight:400;text-transform:none;letter-spacing:0;font-size:12px;color:var(--ink-2);}
+.hook.is-live .sn{color:var(--red);}
+.marks{display:flex;gap:2px;align-items:center;padding-top:2px;}
+.m{display:inline-block;width:6px;height:6px;}
+.m-full{background:var(--ink);}
+.m-fall{border:1px solid var(--ink);background:none;}
+.m-none{width:6px;height:6px;position:relative;}
+.m-none::after{content:"";position:absolute;left:2px;top:2px;width:2px;height:2px;background:var(--ink-3);}
+.gn{font-size:11.5px;font-variant-numeric:oldstyle-nums;text-align:right;color:var(--ink-2);}
+.hook.is-live .gn{color:var(--red);}
+canvas.micro{display:block;}
+.role-b .ev{}
+.role-c .ev{}
+.role-h .ev{font-weight:400;color:var(--ink-2);}
+.hook.is-live.role-h .ev{color:var(--red);}
+
+.tagline{font-size:12px;color:var(--ink-2);font-style:italic;margin:0 0 5px;}
+.terms{font-size:11px;color:var(--ink-3);}
+.terms i{font-style:italic;color:var(--ink-2);}
+
+/* ---------- folio / pagination ---------- */
+.folio{
+  margin-top:18px;padding-top:10px;border-top:3px solid var(--ink);
+  display:flex;justify-content:space-between;align-items:baseline;gap:18px;flex-wrap:wrap;
+}
+.pages{display:flex;gap:0 4px;align-items:baseline;}
+.pg{
+  font-family:var(--text);font-size:15px;background:none;border:0;cursor:pointer;
+  color:var(--ink-2);padding:0 5px 2px;border-bottom:2px solid transparent;
+  font-variant-numeric:oldstyle-nums;
+}
+.pg:hover{color:var(--ink);border-bottom-color:var(--ink-3);}
+.pg[aria-current="true"]{color:var(--ink);font-weight:700;border-bottom:3px solid var(--ink);}
+.pg:disabled{color:#bfb8a8;cursor:default;border-bottom-color:transparent;}
+.pg.step{text-transform:uppercase;letter-spacing:.1em;font-size:11px;}
+.contd{font-style:italic;font-size:12.5px;color:var(--ink-2);}
+
+.colophon{margin-top:34px;padding-top:9px;border-top:1px solid var(--ink);font-size:11.5px;color:var(--ink-3);}
+.empty{padding:26px 0;font-style:italic;color:var(--ink-2);font-size:14px;}
+
+/* the one slider, set as an ink rule with a square slug for a thumb */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;background:none;height:14px;margin:0;
+}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--ink);border:0;}
+input[type=range]::-moz-range-track{height:2px;background:var(--ink);border:0;}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:9px;height:14px;background:var(--ink);
+  border:0;border-radius:0;margin-top:-6px;
+}
+input[type=range]::-moz-range-thumb{width:9px;height:14px;background:var(--ink);border:0;border-radius:0;}
+input[type=range]:focus-visible{outline:1px solid var(--red);outline-offset:3px;}
+
+/* it is, after all, a printed page */
+@media print{
+  body{background:#fff;}
+  .press,.indexbar,.withheld button,.pages{display:none;}
+  .columns{column-count:3;}
+  .hook{cursor:default;}
+}
+</style>
+</head>
+<body data-press="cold">
+<div class="sheet">
+
+  <!-- ============ MASTHEAD ============ -->
+  <header class="masthead">
+    <hr class="r-heavy">
+    <h1><span class="thin">The</span>Tambre Register</h1>
+    <hr class="r-med">
+    <div class="mast-meta lbl">
+      <span>Vol. <i class="fig">I</i> — No. <i class="fig">7</i></span>
+      <span>Saturday, <i class="fig">8</i> August <i class="fig">2026</i></span>
+      <span>An open catalogue of sound packs bound to agent lifecycle events</span>
+      <span>Claude Code · Codex CLI · Cursor</span>
+      <span>Price: none</span>
+    </div>
+    <hr class="r-double">
+  </header>
+
+  <!-- ============ STANDING MATTER ============ -->
+  <section class="standing">
+    <div class="lede">
+      <h2 class="lbl" style="letter-spacing:.19em">From the Editors</h2>
+      <p><span class="drop">P</span>ublish a pack once and it sounds on all three agents. Every entry below
+      is a set of small synthesised noises bound to the moments an agent passes
+      through — a session opening, a tool returning, a permission waiting on a
+      human. The binding, not the noise, is the work: a pack that fires the wrong
+      thing at the wrong volume is worse than silence.</p>
+      <p>Each entry carries its own index of bound hooks. Run the cursor down it
+      and you will hear each hook in turn, at the gain the publisher set. Packages
+      contain no executable code; the whole catalogue is inert JSON.</p>
+    </div>
+
+    <div class="key">
+      <h2 class="lbl" style="letter-spacing:.19em">Key to the Marks</h2>
+      <div><span class="m m-full" style="vertical-align:middle"></span> <span class="lbl" style="letter-spacing:.1em">Fires natively</span></div>
+      <div><span class="m m-fall" style="vertical-align:middle"></span> <span class="lbl" style="letter-spacing:.1em">Reached by fallback only</span></div>
+      <div><span class="m m-none" style="vertical-align:middle;display:inline-block"></span> <span class="lbl" style="letter-spacing:.1em">Silent on this agent</span></div>
+      <p style="margin-top:8px;font-size:12.5px;color:var(--ink-2)">Marks are ordered <b>C</b>laude Code, Code<b>x</b> CLI, C<b>u</b>rsor.
+      Coverage figures count native support only; a raised figure gives the
+      hooks reachable through a fallback chain. <span style="color:var(--red)">Red</span> is sounding.</p>
+    </div>
+
+    <div class="press">
+      <h2 class="lbl" style="letter-spacing:.19em">Notice to the Reader</h2>
+      <div class="press-cold">
+        <p class="gate-line">The type is set but <span class="cold-em">the press is cold</span>. Nothing on this
+        page will sound until you strike it once.</p>
+        <div class="notice"><button class="ink-btn" id="inkBtn">Ink the press</button></div>
+        <p style="margin-top:7px;font-size:11.5px;color:var(--ink-3)">Rendered in your browser. Nothing is fetched, nothing is uploaded.</p>
+      </div>
+      <div class="press-warm">
+        <p><span class="lbl lbl-red">Press inked</span> — the hook index of every entry is now
+        live. Hover a line to audition it; the sweep is throttled so a fast hand
+        does not fire a dozen sounds.</p>
+        <div class="notice">
+          <label class="lbl" for="vol" style="display:block;margin-bottom:5px">House volume</label>
+          <input id="vol" type="range" min="0" max="100" value="70" style="width:100%">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INDEX BAR ============ -->
+  <nav class="indexbar" aria-label="Catalogue index">
+    <div class="frow"><span class="lbl">Approach</span><div class="opts" id="fApproach"></div></div>
+    <div class="frow"><span class="lbl">Complete on</span><div class="opts" id="fAgent"></div></div>
+    <div class="frow"><span class="lbl">Trust</span><div class="opts" id="fTrust"></div></div>
+    <div class="frow"><span class="lbl">Subject</span><div class="opts" id="fTag"></div></div>
+    <div class="frow"><span class="lbl">Set in order of</span><div class="opts" id="fSort"></div></div>
+  </nav>
+
+  <div class="withheld" id="withheld" hidden>
+    <span id="withheldText"></span>
+    <button type="button" id="withheldBtn">Set them anyway</button>
+  </div>
+
+  <div class="tally">
+    <span class="lbl" id="tallyLeft"></span>
+    <span class="lbl" id="tallyRight"></span>
+  </div>
+
+  <!-- ============ THE FEED ============ -->
+  <main class="columns" id="feed"></main>
+
+  <footer class="folio">
+    <span class="contd" id="contd"></span>
+    <div class="pages" id="pages"></div>
+  </footer>
+
+  <div class="colophon">
+    Set from <span class="fig">sdsl/1</span> documents. Sample rate <span class="fig">44100</span>, mono; master chain
+    &times;<span class="fig">0.9</span> &rarr; tanh &rarr; trimmed &rarr; <span class="fig">4</span>&thinsp;ms fade; nothing exceeds
+    &minus;<span class="fig">1</span>&thinsp;dBFS. Waveforms are drawn from the rendered samples, not decoration.
+    Tambre — variant <span class="fig">02</span>, "Broadsheet".
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   TAMBRE — variant 02 "Broadsheet"
+   DSP math (biquad, generators, master chain) follows sdsl/1
+   spec §5.3. Everything visual is this variant's own.
+   ============================================================ */
+"use strict";
+
+/* ---------------- seeded PRNG: FNV-1a 32 + mulberry32 ---------------- */
+function fnv1a(s){let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ---------------- RBJ cookbook band-pass, constant peak gain ---------------- */
+const SR=44100;
+function bpCoeffs(f0,Q,sr){
+  f0=Math.max(20,Math.min(f0,sr*0.45));
+  const w0=2*Math.PI*f0/sr, al=Math.sin(w0)/(2*Math.max(0.05,Q)), c=Math.cos(w0);
+  const b0=al,b1=0,b2=-al,a0=1+al,a1=-2*c,a2=1-al;
+  return [b0/a0,b1/a0,b2/a0,a1/a0,a2/a0];
+}
+function biquad(x,co){
+  const b0=co[0],b1=co[1],b2=co[2],a1=co[3],a2=co[4];
+  let x1=0,x2=0,y1=0,y2=0;
+  const out=new Float32Array(x.length);
+  for(let i=0;i<x.length;i++){
+    const xi=x[i], y=b0*xi+b1*x1+b2*x2-a1*y1-a2*y2;
+    out[i]=y;x2=x1;x1=xi;y2=y1;y1=y;
+  }
+  return out;
+}
+
+/* ---------------- the six generators ---------------- */
+function gTap(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.24)*SR));
+  const exc=new Float32Array(n);
+  for(let i=0;i<n;i++){const t=i/SR;exc[i]=(rng()*2-1)*Math.exp(-t/0.0016);}
+  const body=biquad(exc,bpCoeffs(p.f||400,p.q||3.2,SR));
+  const out=new Float32Array(n), dec=p.dec||0.04;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    let v=body[i]*Math.exp(-t/dec)*3.2;
+    if(p.thump) v+=Math.sin(2*Math.PI*(p.thumpf||70)*t)*p.thump*Math.exp(-t/(p.thumpdec||0.06));
+    if(p.bright) v+=(rng()*2-1)*p.bright*Math.exp(-t/0.005);
+    out[i]=v;
+  }
+  return out;
+}
+function gModal(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.6)*SR));
+  const out=new Float32Array(n);
+  const parts=p.partials||[[1,1,1]], dec=p.dec||0.35, f0=p.f0||440;
+  for(let k=0;k<parts.length;k++){
+    const ratio=parts[k][0], amp=parts[k][1], dm=parts[k][2];
+    const f=f0*ratio, d=dec*(dm||1), ph=rng()*0.4;
+    for(let i=0;i<n;i++){
+      const t=i/SR;
+      out[i]+=Math.sin(2*Math.PI*f*t+ph)*amp*Math.exp(-t/d);
+    }
+  }
+  if(p.hit){
+    const hn=Math.min(n,Math.round(0.004*SR));
+    for(let i=0;i<hn;i++) out[i]+=(rng()*2-1)*p.hit*(1-i/hn);
+  }
+  let mx=0;for(let i=0;i<n;i++)mx=Math.max(mx,Math.abs(out[i]));
+  if(mx>0)for(let i=0;i<n;i++)out[i]/=mx;
+  return out;
+}
+function gPluck(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.5)*SR));
+  const f0=p.f0||220, L=Math.max(2,Math.round(SR/f0));
+  const buf=new Float32Array(L);
+  const bright=p.bright!==undefined?p.bright:0.5;
+  for(let i=0;i<L;i++)buf[i]=(rng()*2-1);
+  const passes=Math.round((1-bright)*6);
+  for(let k=0;k<passes;k++){
+    let prev=buf[L-1];
+    for(let i=0;i<L;i++){const c=buf[i];buf[i]=(c+prev)*0.5;prev=c;}
+  }
+  const damp=p.damp!==undefined?p.damp:0.996;
+  const out=new Float32Array(n);
+  let idx=0,prev=0;
+  for(let i=0;i<n;i++){
+    const cur=buf[idx];
+    const y=(cur+prev)*0.5*damp;
+    out[i]=cur;
+    buf[idx]=y;prev=cur;
+    idx=(idx+1)%L;
+  }
+  for(let i=0;i<n;i++){const t=i/SR;out[i]*=Math.min(1,t/0.002);}
+  return out;
+}
+function gTone(p,rng){
+  const n=Math.max(1,Math.round((p.dur||1.0)*SR));
+  const out=new Float32Array(n);
+  const parts=p.partials||[[1,1]], f0=p.f0||220;
+  const atk=p.atk||0.05, rel=p.rel||0.3;
+  const vib=p.vib||0, vibr=p.vibrate||5, drift=p.drift||0;
+  const dph=rng()*Math.PI*2;
+  for(let k=0;k<parts.length;k++){
+    const ratio=parts[k][0], amp=parts[k][1];
+    let ph=rng()*Math.PI*2;
+    for(let i=0;i<n;i++){
+      const t=i/SR;
+      const dv=drift?Math.sin(2*Math.PI*0.13*t+dph)*drift:0;
+      const f=f0*ratio*(1+dv)*(1+(vib?Math.sin(2*Math.PI*vibr*t)*vib:0));
+      ph+=2*Math.PI*f/SR;
+      out[i]+=Math.sin(ph)*amp;
+    }
+  }
+  for(let i=0;i<n;i++){
+    const t=i/SR, tl=(n-i)/SR;
+    out[i]*=Math.min(1,t/atk)*Math.min(1,tl/rel);
+  }
+  let mx=0;for(let i=0;i<n;i++)mx=Math.max(mx,Math.abs(out[i]));
+  if(mx>0)for(let i=0;i<n;i++)out[i]/=mx;
+  return out;
+}
+function gBlip(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.16)*SR));
+  const out=new Float32Array(n);
+  const f0=p.f0||440,f1=p.f1||880,wave=p.wave||"sine",dec=p.dec||(p.dur||0.16)*0.5;
+  let ph=0;
+  for(let i=0;i<n;i++){
+    const t=i/SR, u=i/n;
+    const f=f0*Math.pow(Math.max(1e-6,f1/f0),u);
+    ph+=2*Math.PI*f/SR;
+    const x=ph%(2*Math.PI);
+    let v;
+    if(wave==="square")v=x<Math.PI?1:-1;
+    else if(wave==="saw")v=x/Math.PI-1;
+    else if(wave==="tri")v=x<Math.PI?(x/Math.PI*2-1):(3-x/Math.PI*2);
+    else v=Math.sin(x);
+    out[i]=v*Math.exp(-t/dec);
+  }
+  return out;
+}
+function gNoise(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.2)*SR));
+  const raw=new Float32Array(n);
+  for(let i=0;i<n;i++)raw[i]=rng()*2-1;
+  const lo=p.lo||300, hi=p.hi||3000;
+  const ctr=Math.sqrt(Math.max(20,lo)*Math.max(40,hi));
+  const Q=Math.max(0.35,ctr/Math.max(1,(hi-lo)));
+  const out=biquad(raw,bpCoeffs(ctr,Q,SR));
+  const atk=p.atk||0.002, dec=p.dec||(p.dur||0.2)*0.4, curve=p.curve||1;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    const e=Math.min(1,t/atk)*Math.pow(Math.exp(-t/dec),curve);
+    out[i]*=e*2.4;
+  }
+  return out;
+}
+const GENS={tap:gTap,modal:gModal,pluck:gPluck,tone:gTone,blip:gBlip,noise:gNoise};
+
+/* ---------------- render one sdsl document ---------------- */
+function renderSdsl(doc,seedStr,volume){
+  const vol=volume===undefined?1:volume;
+  const rng=mulberry32(fnv1a(seedStr));
+  const evs=doc.events||[];
+  let tail=0;
+  for(let i=0;i<evs.length;i++){
+    const e=evs[i];
+    tail=Math.max(tail,(e.t||0)+((e.p&&e.p.dur)||0.5));
+  }
+  const n=Math.round((tail+0.05)*SR);
+  const mix=new Float32Array(n);
+  for(let k=0;k<evs.length;k++){
+    const e=evs[k];
+    const gen=GENS[e.g];if(!gen)continue;
+    const buf=gen(e.p||{},rng);
+    const off=Math.round((e.t||0)*SR);
+    const g=e.gain!==undefined?e.gain:1;
+    for(let i=0;i<buf.length;i++){
+      const j=off+i;if(j>=n)break;
+      mix[j]+=buf[i]*g;
+    }
+  }
+  /* master chain (§5.3): x0.9 x volume -> tanh(x*1.25)*0.8 -> trim -> 4 ms fade */
+  for(let i=0;i<n;i++){
+    const v=mix[i]*0.9*vol;
+    mix[i]=Math.tanh(v*1.25)*0.8;
+  }
+  let last=n-1;
+  while(last>0&&Math.abs(mix[last])<1.26e-4)last--;
+  const out=mix.slice(0,Math.max(1,last+1));
+  const fade=Math.min(out.length,Math.round(0.004*SR));
+  for(let i=0;i<fade;i++) out[out.length-fade+i]*=1-i/fade;
+  return out;
+}
+function peaksFrom(buf,bins){
+  const out=new Array(bins).fill(0);
+  const step=buf.length/bins;
+  for(let b=0;b<bins;b++){
+    let mx=0;
+    const s=Math.floor(b*step), e=Math.min(buf.length,Math.floor((b+1)*step));
+    for(let i=s;i<e;i++){const a=Math.abs(buf[i]);if(a>mx)mx=a;}
+    out[b]=mx;
+  }
+  let m=0;for(let i=0;i<bins;i++)m=Math.max(m,out[i]);
+  if(m>0)for(let i=0;i<bins;i++)out[i]/=m;
+  return out;
+}
+
+/* ---------------- canonical events, roles, support ---------------- */
+const EVENT_DEFS=[
+  ["session.start","boundary","cxu"],
+  ["session.end","boundary","cxu"],
+  ["prompt.submit","boundary","cxu"],
+  ["turn.end","cue","cxu"],
+  ["turn.fail","boundary","c"],
+  ["tool.pre","churn","cxu"],
+  ["tool.post","churn","cxu"],
+  ["tool.fail","churn","cxu"],
+  ["permission.request","cue","cx"],
+  ["permission.denied","churn","c"],
+  ["notification","cue","c"],
+  ["subagent.start","churn","cxu"],
+  ["subagent.end","churn","cxu"],
+  ["compact.pre","boundary","cxu"],
+  ["compact.post","boundary","cx"],
+  ["file.edit","churn","u"]
+];
+const EV={};
+const EV_ORDER={};
+EVENT_DEFS.forEach(function(d,i){
+  EV[d[0]]={role:d[1],support:{c:d[2].indexOf("c")>=0,x:d[2].indexOf("x")>=0,u:d[2].indexOf("u")>=0}};
+  EV_ORDER[d[0]]=i;
+});
+const ROLE_GAIN={boundary:1.0,cue:0.9,churn:0.2};
+const ROLE_THROTTLE={boundary:0,cue:0,churn:120};
+const AGENTS=[["c","Claude Code","Cla"],["x","Codex CLI","Cod"],["u","Cursor","Cur"]];
+
+/* ---------------- sound builders (compact sdsl authoring) ---------------- */
+function T(f,dec,dur,o){o=o||{};return {t:o.t||0,g:"tap",gain:o.gain===undefined?0.95:o.gain,
+  p:{f:f,q:o.q||3.2,dec:dec,dur:dur,thump:o.thump||0,thumpf:o.thumpf||70,thumpdec:o.thumpdec||0.06,bright:o.bright===undefined?0.10:o.bright}};}
+function M(f0,partials,dec,dur,o){o=o||{};return {t:o.t||0,g:"modal",gain:o.gain===undefined?0.9:o.gain,
+  p:{f0:f0,partials:partials,dec:dec,dur:dur,hit:o.hit||0}};}
+function P(f0,dur,o){o=o||{};return {t:o.t||0,g:"pluck",gain:o.gain===undefined?0.85:o.gain,
+  p:{f0:f0,dur:dur,damp:o.damp===undefined?0.996:o.damp,bright:o.bright===undefined?0.5:o.bright}};}
+function O(f0,partials,dur,o){o=o||{};return {t:o.t||0,g:"tone",gain:o.gain===undefined?0.8:o.gain,
+  p:{f0:f0,partials:partials,dur:dur,atk:o.atk||0.06,rel:o.rel||0.35,vib:o.vib||0,vibrate:o.vibrate||5,drift:o.drift||0}};}
+function B(f0,f1,dur,wave,o){o=o||{};return {t:o.t||0,g:"blip",gain:o.gain===undefined?0.8:o.gain,
+  p:{f0:f0,f1:f1,dur:dur,wave:wave,dec:o.dec||dur*0.5}};}
+function N(lo,hi,dur,o){o=o||{};return {t:o.t||0,g:"noise",gain:o.gain===undefined?0.9:o.gain,
+  p:{lo:lo,hi:hi,dur:dur,atk:o.atk||0.002,dec:o.dec||dur*0.4,curve:o.curve||1}};}
+function S(){return {kind:"sdsl",events:Array.prototype.slice.call(arguments)};}
+
+const BELL2=[[1,1,1],[2.76,0.42,0.55],[5.4,0.18,0.32],[8.9,0.07,0.2]];
+const BOWL=[[1,1,1],[2.0,0.5,0.7],[3.01,0.28,0.5],[4.2,0.12,0.34]];
+const COIN=[[1,1,1],[1.59,0.7,0.6],[2.14,0.45,0.44],[3.42,0.22,0.3],[5.1,0.1,0.2]];
+const WOODBAR=[[1,1,1],[3.9,0.35,0.4],[10.1,0.1,0.22]];
+const DRONE=[[1,1],[2,0.5],[3,0.26],[4,0.13],[5,0.07]];
+const REEDY=[[1,1],[2,0.34],[3,0.5],[4,0.16],[5,0.24],[7,0.1]];
+
+/* ---------------- the catalogue: 24 packs ---------------- */
+/* b: [event, soundName, gainOverride|null, fallbackChain|null] */
+const PACKS=[
+{t:"Foolscap",s:"@quire/foolscap",v:"1.4.0",ap:"tactile",tr:"curated",lic:"CC0-1.0",
+ pub:"2026-07-28",ins:18420,pl:96140,tags:["paper","dry","quiet","non-pitched"],
+ d:"One fingertip drawn across a dry sheet. Nothing is pitched; the counts and the weights carry all of the meaning. The quietest thing in the catalogue that you can still hear over a fan.",
+ snd:{"leaf-turn":S(N(900,4200,0.20,{atk:0.004,dec:0.055,curve:1.3})),
+      "crease":S(N(520,2600,0.12,{dec:0.030,curve:1.6})),
+      "stack":S(T(214,0.055,0.26,{thump:0.42,thumpf:66,q:2.4}))},
+ b:[["turn.end","leaf-turn",null,null],
+    ["permission.request","leaf-turn",null,["notification","turn.end"]],
+    ["tool.pre","crease",0.18,null],
+    ["tool.post","crease",0.15,null],
+    ["session.start","stack",null,null]]},
+
+{t:"Ledger Nib",s:"@quire/ledger-nib",v:"2.0.1",ap:"tactile",tr:"attested",lic:"MIT",
+ pub:"2026-07-11",ins:9310,pl:41880,tags:["ink","click","dry","paper"],
+ d:"A steel nib on ruled stock. The double stroke on turn end reads as a signature rather than an alarm; failures get the blot.",
+ snd:{"nib":S(T(1240,0.011,0.10,{q:6.5,bright:0.16})),
+      "nib-two":S(T(1180,0.012,0.10,{q:6.5,bright:0.14,gain:0.7}),T(1420,0.013,0.11,{q:6.5,bright:0.16,t:0.086})),
+      "blot":S(N(190,1300,0.16,{dec:0.05,curve:1.1})),
+      "scratch":S(N(1500,6200,0.085,{atk:0.003,dec:0.026,curve:1.5}))},
+ b:[["turn.end","nib-two",null,null],
+    ["prompt.submit","scratch",null,null],
+    ["tool.pre","nib",0.20,null],
+    ["tool.post","nib",0.17,null],
+    ["tool.fail","blot",0.40,null]]},
+
+{t:"Compositor",s:"@letterpress/compositor",v:"1.1.2",ap:"hybrid",tr:"curated",lic:"CC0-1.0",
+ pub:"2026-08-02",ins:24760,pl:158300,tags:["metal","type","dense","click"],
+ d:"Foundry type dropped into a galley, quoin locked, chase lifted. Metal without being bright: the partials are inharmonic and the decays are short.",
+ snd:{"slug":S(M(524,COIN,0.14,0.34,{hit:0.3})),
+      "galley":S(T(880,0.024,0.14,{q:2.4,bright:0.16,gain:0.8}),T(1030,0.022,0.13,{q:2.6,t:0.062,bright:0.16,gain:0.9}),T(760,0.026,0.15,{q:2.2,bright:0.14,t:0.128})),
+      "quoin":S(T(940,0.020,0.16,{q:7.5,thump:0.2,thumpf:110})),
+      "chase":S(M(196,WOODBAR,0.30,0.55,{hit:0.22}))},
+ b:[["turn.end","slug",null,null],
+    ["session.start","chase",null,null],
+    ["compact.pre","chase",0.85,null],
+    ["subagent.start","galley",0.20,null],
+    ["tool.post","quoin",0.18,null],
+    ["tool.pre","quoin",0.20,null]]},
+
+{t:"Linotype Bell",s:"@letterpress/linotype-bell",v:"3.2.0",ap:"jingle",tr:"curated",lic:"Apache-2.0",
+ pub:"2026-06-19",ins:31240,pl:284910,tags:["bell","brass","pitched","bright"],
+ d:"The line-casting bell, tuned down a fourth so it does not shriek in a small room. Two struck notes for a finished turn; one for anything that wants a human.",
+ snd:{"bell-low":S(M(392,BELL2,0.55,1.05,{hit:0.18})),
+      "bell-high":S(M(587,BELL2,0.42,0.85,{hit:0.20})),
+      "bell-pair":S(M(392,BELL2,0.40,0.70,{hit:0.16,gain:0.7}),M(587,BELL2,0.48,0.95,{hit:0.18,t:0.14})),
+      "bell-flat":S(M(370,[[1,1,1],[2.61,0.5,0.5],[4.9,0.2,0.3]],0.36,0.72,{hit:0.24}))},
+ b:[["turn.end","bell-pair",null,null],
+    ["notification","bell-high",null,null],
+    ["permission.request","bell-high",null,["notification","turn.end"]],
+    ["turn.fail","bell-flat",null,["turn.end"]],
+    ["session.end","bell-low",null,null]]},
+
+{t:"Marginalia",s:"@scholia/marginalia",v:"0.9.4",ap:"tactile",tr:"attested",lic:"CC0-1.0",
+ pub:"2026-05-30",ins:5120,pl:20440,tags:["pencil","quiet","sparse","non-pitched"],
+ d:"Two sounds and no ambition: a pencil tick and a short dash in the margin. Written for people who found every other pack too talkative.",
+ snd:{"tick":S(T(1560,0.009,0.075,{q:7.5,bright:0.2})),
+      "dash":S(N(700,3100,0.10,{dec:0.028,curve:1.4}))},
+ b:[["turn.end","tick",null,null],
+    ["tool.pre","tick",0.18,null],
+    ["tool.post","dash",0.16,null]]},
+
+{t:"The Regrettably Comprehensive Compendium of Very Small Noises for Overnight Agent Sessions",
+ s:"@veilliard/compendium",v:"1.0.0",ap:"hybrid",tr:"attested",lic:"CC-BY-4.0",
+ pub:"2026-07-19",ins:2870,pl:11930,tags:["nocturnal","hush","low","sparse"],
+ d:"Six sounds for the small hours, one per generator in the DSL, all of them under the level of a room fan. The title is deliberate; the author has been asked to shorten it and declined.",
+ snd:{"mote":S(T(430,0.022,0.14,{q:4.0,thump:0.18,thumpf:58})),
+      "hush":S(N(240,1500,0.30,{atk:0.03,dec:0.10,curve:0.85})),
+      "drone-low":S(O(96,DRONE,1.60,{atk:0.34,rel:0.60,drift:0.006})),
+      "water":S(B(1180,420,0.13,"sine",{dec:0.05})),
+      "coin":S(M(742,COIN,0.22,0.48,{hit:0.14})),
+      "thread":S(P(268,0.52,{damp:0.9915,bright:0.28}))},
+ b:[["session.start","drone-low",null,null],
+    ["turn.end","coin",null,null],
+    ["notification","water",null,null],
+    ["tool.pre","mote",0.20,null],
+    ["tool.post","hush",0.16,null],
+    ["subagent.start","thread",0.20,null]]},
+
+{t:"Thimble",s:"@haberdash/thimble",v:"1.3.1",ap:"tactile",tr:"attested",lic:"MIT",
+ pub:"2026-06-04",ins:7640,pl:33210,tags:["wood","warm","click","dry"],
+ d:"A brass thimble against a wooden table edge, plus the pad of a finger for the churn. Warm mid, no top, nothing above two kilohertz to speak of.",
+ snd:{"thimble":S(T(648,0.030,0.20,{q:4.4,thump:0.26,thumpf:88})),
+      "pad":S(T(292,0.040,0.22,{q:2.2,thump:0.5,thumpf:62,bright:0.03})),
+      "knock":S(T(560,0.032,0.19,{q:3.4,gain:0.8,thump:0.26,thumpf:84}),T(648,0.034,0.21,{q:3.6,t:0.098,thump:0.30,thumpf:88}))},
+ b:[["turn.end","knock",null,null],
+    ["prompt.submit","thimble",null,null],
+    ["tool.pre","pad",0.20,null],
+    ["tool.post","pad",0.17,null]]},
+
+{t:"Copperplate",s:"@engrave/copperplate",v:"2.1.0",ap:"jingle",tr:"attested",lic:"CC0-1.0",
+ pub:"2026-07-02",ins:14030,pl:88720,tags:["string","pitched","bright","metal"],
+ d:"Karplus-Strong plucks with the excitation filtered down so they read as wound gut rather than nylon. A rising pair for a good turn, a muted stop for a bad one.",
+ snd:{"pluck-a":S(P(330,0.62,{damp:0.9965,bright:0.62})),
+      "pluck-b":S(P(494,0.52,{damp:0.9958,bright:0.68})),
+      "pair":S(P(330,0.40,{damp:0.9955,bright:0.6,gain:0.62}),P(494,0.58,{damp:0.9962,bright:0.66,t:0.13})),
+      "mute":S(P(196,0.24,{damp:0.982,bright:0.2}))},
+ b:[["turn.end","pair",null,null],
+    ["permission.request","pluck-b",null,["notification","turn.end"]],
+    ["turn.fail","mute",null,["turn.end"]],
+    ["tool.post","pluck-a",0.18,null],
+    ["compact.pre","pluck-a",0.85,null]]},
+
+{t:"Rushlight",s:"@tallow/rushlight",v:"1.0.6",ap:"bed",tr:"attested",lic:"CC-BY-4.0",
+ pub:"2026-05-16",ins:6480,pl:52380,tags:["warm","low","drone","continuous"],
+ d:"A bed, not a set of cues: the dynamic range is deliberately flat so a long run of tool calls turns into one continuous hum rather than a stutter of ticks.",
+ snd:{"bed-low":S(O(110,DRONE,1.90,{atk:0.42,rel:0.72,drift:0.008})),
+      "bed-mid":S(O(165,REEDY,1.30,{atk:0.26,rel:0.50,vib:0.004,vibrate:4.2})),
+      "flicker":S(O(220,[[1,1],[2,0.4],[3,0.2]],0.42,{atk:0.05,rel:0.20,vib:0.012,vibrate:7.5})),
+      "snuff":S(N(160,900,0.24,{atk:0.01,dec:0.075,curve:0.9}))},
+ b:[["session.start","bed-low",null,null],
+    ["session.end","snuff",null,null],
+    ["turn.end","bed-mid",null,null],
+    ["tool.pre","flicker",0.34,null],
+    ["tool.post","flicker",0.30,null]]},
+
+{t:"Foundry Bed",s:"@letterpress/foundry-bed",v:"0.7.2",ap:"bed",tr:"attested",lic:"MIT",
+ pub:"2026-04-22",ins:3910,pl:29450,tags:["low","metal","drone","dense"],
+ d:"The room tone of a hot-metal shop at half past six. Very low fundamental; on small laptop speakers you will mostly hear the tick.",
+ snd:{"hum":S(O(82,DRONE,2.10,{atk:0.50,rel:0.85,drift:0.011})),
+      "swell":S(O(123,[[1,1],[2,0.55],[3,0.3],[4.5,0.12]],1.40,{atk:0.35,rel:0.62})),
+      "tick":S(T(1120,0.026,0.14,{q:3.0,bright:0.16,thump:0.30,thumpf:130}))},
+ b:[["session.start","hum",null,null],
+    ["compact.pre","swell",null,null],
+    ["turn.end","swell",null,null],
+    ["tool.post","tick",0.30,null]]},
+
+{t:"Quill for Cursor",s:"@recto/quill",v:"1.2.0",ap:"tactile",tr:"attested",lic:"CC0-1.0",
+ pub:"2026-07-24",ins:8120,pl:36720,tags:["paper","ink","click","cursor"],
+ d:"Bound chiefly to file.edit, which only Cursor fires. It therefore reads more completely on Cursor than on Claude Code — the one pack in this catalogue where that is true, and it is the point rather than an oversight.",
+ snd:{"scratch":S(N(1100,4800,0.075,{atk:0.002,dec:0.022,curve:1.6})),
+      "lift":S(T(760,0.026,0.15,{q:3.6,bright:0.16,thump:0.22,thumpf:104})),
+      "tick":S(T(1320,0.010,0.085,{q:7.0,bright:0.18})),
+      "open":S(N(420,2400,0.22,{atk:0.012,dec:0.07,curve:1.1}))},
+ b:[["turn.end","lift",null,null],
+    ["session.start","open",null,null],
+    ["file.edit","scratch",0.20,null],
+    ["tool.pre","tick",0.18,null],
+    ["tool.post","tick",0.16,null]]},
+
+{t:"Semaphore",s:"@signal/semaphore",v:"4.0.0",ap:"jingle",tr:"attested",lic:"Apache-2.0",
+ pub:"2026-08-05",ins:20880,pl:201470,tags:["blip","arcade","bright","pitched"],
+ d:"Swept oscillators, unapologetically synthetic. Rising for done, falling for stopped, square pair for anything waiting on you. The loudest pack here and it knows it.",
+ snd:{"up":S(B(440,1180,0.15,"sine",{dec:0.06})),
+      "down":S(B(940,330,0.19,"tri",{dec:0.08})),
+      "morse":S(B(780,780,0.055,"square",{dec:0.03,gain:0.55}),B(1040,1040,0.07,"square",{dec:0.035,t:0.10,gain:0.6})),
+      "buzz":S(B(300,140,0.22,"saw",{dec:0.09}))},
+ b:[["turn.end","up",null,null],
+    ["permission.request","morse",null,["notification","turn.end"]],
+    ["turn.fail","buzz",null,["turn.end"]],
+    ["session.end","down",null,null],
+    ["tool.fail","buzz",0.24,null]]},
+
+{t:"Gutter & Rule",s:"@recto/gutter-rule",v:"1.0.3",ap:"tactile",tr:"attested",lic:"MIT",
+ pub:"2026-03-27",ins:4460,pl:18310,tags:["dry","wood","sparse","non-pitched"],
+ d:"A wooden setting rule dropped in the gutter of an open book. Three sounds, all short, all dull on purpose.",
+ snd:{"rule":S(T(380,0.032,0.20,{q:3.0,thump:0.34,thumpf:74})),
+      "gutter":S(T(240,0.048,0.26,{q:2.0,thump:0.52,thumpf:58,bright:0.02})),
+      "edge":S(T(920,0.014,0.11,{q:6.0,bright:0.12}))},
+ b:[["turn.end","rule",null,null],
+    ["session.end","gutter",null,null],
+    ["tool.pre","edge",0.20,null],
+    ["subagent.end","edge",0.18,null]]},
+
+{t:"Dovecote",s:"@aviary/dovecote",v:"2.3.4",ap:"jingle",tr:"curated",lic:"CC-BY-4.0",
+ pub:"2026-06-27",ins:27130,pl:239660,tags:["bell","glass","warm","pitched"],
+ d:"Small glass bowls, struck softly. The trill on turn end is three strikes inside a hundred and eighty milliseconds, which is about as much ornament as a working day tolerates.",
+ snd:{"coo":S(M(466,BOWL,0.46,0.90,{hit:0.10})),
+      "chime":S(M(698,BOWL,0.34,0.68,{hit:0.14})),
+      "trill":S(M(466,BOWL,0.22,0.44,{hit:0.10,gain:0.55}),M(587,BOWL,0.24,0.48,{hit:0.10,t:0.09,gain:0.65}),M(698,BOWL,0.36,0.72,{hit:0.12,t:0.18}))},
+ b:[["turn.end","trill",null,null],
+    ["notification","chime",null,null],
+    ["permission.request","chime",null,["notification","turn.end"]],
+    ["session.start","coo",null,null],
+    ["compact.post","coo",0.85,null]]},
+
+{t:"Watermark",s:"@quire/watermark",v:"1.1.0",ap:"bed",tr:"attested",lic:"CC0-1.0",
+ pub:"2026-05-08",ins:5730,pl:44190,tags:["hush","breathy","continuous","quiet"],
+ d:"Breath through a folded sheet. Long attacks and long releases, so the churn events smear into each other instead of chattering.",
+ snd:{"breath":S(N(300,2200,0.55,{atk:0.11,dec:0.20,curve:0.7})),
+      "veil":S(O(147,[[1,1],[2,0.42],[3.02,0.2],[4,0.09]],1.25,{atk:0.30,rel:0.55,drift:0.005})),
+      "grain":S(N(800,5200,0.13,{atk:0.02,dec:0.04,curve:1.2}))},
+ b:[["session.start","veil",null,null],
+    ["turn.end","breath",null,null],
+    ["tool.pre","grain",0.28,null],
+    ["tool.post","grain",0.26,null]]},
+
+{t:"Pica & Point",s:"@letterpress/pica-point",v:"1.6.0",ap:"tactile",tr:"attested",lic:"MIT",
+ pub:"2026-04-09",ins:11290,pl:71440,tags:["metal","click","dense","dry"],
+ d:"Em quads and thin spaces, sorted by hand. Dense, fast, and pitched only by accident. The churn gain is set low enough that a hundred tool calls do not become a drum solo.",
+ snd:{"quad":S(T(1480,0.009,0.075,{q:8.0,bright:0.2})),
+      "space":S(T(1080,0.011,0.09,{q:6.5,bright:0.14})),
+      "sort":S(T(1480,0.008,0.07,{q:8.0,bright:0.18,gain:0.6}),T(1180,0.010,0.085,{q:7.0,bright:0.16,t:0.055})),
+      "case":S(T(300,0.042,0.24,{q:2.4,thump:0.46,thumpf:64}))},
+ b:[["turn.end","sort",null,null],
+    ["prompt.submit","case",null,null],
+    ["tool.pre","quad",0.18,null],
+    ["tool.post","space",0.16,null],
+    ["subagent.start","space",0.18,null]]},
+
+{t:"Errata",s:"@scholia/errata",v:"0.4.1",ap:"hybrid",tr:"attested",lic:"CC0-1.0",
+ pub:"2026-07-15",ins:6910,pl:27820,tags:["warn","low","dry","failure"],
+ d:"A pack about things going wrong, which is why four of its five bindings are failure paths. On Codex and Cursor half of it is unreachable and the entry says so plainly.",
+ snd:{"strike":S(T(196,0.055,0.30,{q:2.0,thump:0.62,thumpf:52,bright:0.02})),
+      "buzz-low":S(B(260,110,0.26,"saw",{dec:0.10})),
+      "sigh":S(N(220,1600,0.30,{atk:0.05,dec:0.09,curve:0.8})),
+      "thud":S(T(340,0.036,0.22,{q:2.6,thump:0.4,thumpf:70}))},
+ b:[["turn.fail","strike",null,["turn.end"]],
+    ["tool.fail","buzz-low",0.32,null],
+    ["permission.denied","sigh",0.22,["tool.fail"]],
+    ["turn.end","thud",null,null],
+    ["compact.post","thud",0.80,null]]},
+
+{t:"Frontispiece",s:"@recto/frontispiece",v:"1.0.0",ap:"jingle",tr:"curated",lic:"Apache-2.0",
+ pub:"2026-08-06",ins:16240,pl:104650,tags:["bell","pitched","warm","opening"],
+ d:"Three notes to open a session and two to close it. Nothing at all bound to tool calls: the author's position is that churn should be silent and boundaries should not.",
+ snd:{"fanfare":S(M(392,BELL2,0.30,0.58,{hit:0.14,gain:0.5}),M(523,BELL2,0.32,0.62,{hit:0.14,t:0.11,gain:0.6}),M(659,BELL2,0.52,1.00,{hit:0.16,t:0.22})),
+      "single":S(M(523,BELL2,0.44,0.86,{hit:0.16})),
+      "close":S(M(311,BELL2,0.58,1.10,{hit:0.12}))},
+ b:[["session.start","fanfare",null,null],
+    ["session.end","close",null,null],
+    ["turn.end","single",null,null],
+    ["compact.pre","close",0.80,null],
+    ["compact.post","single",0.80,null]]},
+
+{t:"Chapbook",s:"@stitch/chapbook",v:"0.2.0",ap:"tactile",tr:"unverified",lic:"CC0-1.0",
+ pub:"2026-08-07",ins:210,pl:640,tags:["paper","stitch","quiet","dry"],
+ d:"Pamphlet stock, hand-stitched, three signatures. Newly published under an unattested scope, which is why you will not see it in the default setting of this page.",
+ snd:{"stitch":S(T(1180,0.010,0.08,{q:6.8,bright:0.16})),
+      "fold":S(N(600,3000,0.12,{dec:0.032,curve:1.4})),
+      "trim":S(N(1400,6800,0.07,{atk:0.002,dec:0.02,curve:1.7}))},
+ b:[["turn.end","fold",null,null],
+    ["tool.pre","stitch",0.18,null],
+    ["tool.post","stitch",0.16,null],
+    ["prompt.submit","trim",null,null]]},
+
+{t:"Tin Post",s:"@greenroom/tin-post",v:"0.1.3",ap:"jingle",tr:"unverified",lic:"MIT",
+ pub:"2026-08-04",ins:96,pl:410,tags:["tin","bright","pitched","cheap"],
+ d:"Cheerfully thin. Struck tin with almost no low end, which makes it audible in an open-plan office and unbearable in headphones. Unattested; audition before you install.",
+ snd:{"tin-hi":S(M(1046,[[1,1,1],[2.4,0.62,0.4],[4.1,0.3,0.26],[6.6,0.14,0.18]],0.16,0.34,{hit:0.3})),
+      "tin-lo":S(M(698,[[1,1,1],[2.4,0.6,0.42],[4.1,0.28,0.28]],0.20,0.42,{hit:0.26})),
+      "rattle":S(N(2200,9000,0.10,{atk:0.002,dec:0.03,curve:1.5}))},
+ b:[["turn.end","tin-hi",null,null],
+    ["notification","tin-lo",null,null],
+    ["tool.post","rattle",0.16,null],
+    ["tool.fail","tin-lo",0.28,null]]},
+
+{t:"Slug Line",s:"@letterpress/slug-line",v:"0.5.0",ap:"tactile",tr:"unverified",lic:"CC0-1.0",
+ pub:"2026-07-31",ins:340,pl:1180,tags:["metal","dry","click","dense"],
+ d:"One lead slug against another, three times over. The publisher has not attested the scope; the fingerprint in the manifest matches no gist and no DNS record.",
+ snd:{"slug-a":S(T(820,0.017,0.13,{q:5.4,thump:0.16,thumpf:96})),
+      "slug-b":S(T(1060,0.024,0.13,{q:3.0,bright:0.20,thump:0.22,thumpf:140})),
+      "line":S(T(820,0.015,0.12,{q:5.4,gain:0.6}),T(1060,0.013,0.10,{q:6.2,t:0.07,gain:0.7}),T(700,0.019,0.14,{q:5.0,t:0.15}))},
+ b:[["turn.end","line",null,null],
+    ["tool.pre","slug-a",0.20,null],
+    ["tool.post","slug-b",0.17,null],
+    ["subagent.end","slug-b",0.18,null]]},
+
+{t:"Verso Drone",s:"@recto/verso-drone",v:"0.3.1",ap:"bed",tr:"unverified",lic:"CC-BY-4.0",
+ pub:"2026-06-12",ins:520,pl:6240,tags:["drone","low","continuous","warm"],
+ d:"A single sustained fifth with a slow drift, plus two smaller sounds to break it. Unattested and thinly documented, but the drift figure is well chosen.",
+ snd:{"fifth":S(O(131,[[1,1],[1.5,0.7],[2,0.44],[3,0.2],[4,0.1]],1.80,{atk:0.44,rel:0.75,drift:0.010})),
+      "lift":S(O(196,[[1,1],[2,0.4],[3,0.18]],0.60,{atk:0.10,rel:0.28})),
+      "drop":S(T(260,0.040,0.24,{q:2.2,thump:0.48,thumpf:60}))},
+ b:[["session.start","fifth",null,null],
+    ["turn.end","lift",null,null],
+    ["session.end","drop",null,null],
+    ["tool.post","drop",0.30,null]]},
+
+{t:"Deckle Edge",s:"@quire/deckle",v:"1.2.2",ap:"tactile",tr:"attested",lic:"MIT",
+ pub:"2026-03-14",ins:8890,pl:47030,tags:["paper","rough","dry","quiet"],
+ d:"The untrimmed edge of a mould-made sheet, run under a thumb. Four sounds, four bands of noise, no pitch anywhere in the pack.",
+ snd:{"deckle":S(N(700,3800,0.17,{atk:0.006,dec:0.05,curve:1.2})),
+      "thumb":S(N(300,1700,0.14,{atk:0.01,dec:0.045,curve:1.0})),
+      "riffle":S(N(1200,6000,0.22,{atk:0.02,dec:0.07,curve:0.9})),
+      "set-down":S(T(230,0.050,0.26,{q:2.2,thump:0.5,thumpf:60,bright:0.02}))},
+ b:[["turn.end","deckle",null,null],
+    ["prompt.submit","riffle",null,null],
+    ["session.start","set-down",null,null],
+    ["tool.pre","thumb",0.18,null],
+    ["tool.post","thumb",0.16,null]]},
+
+{t:"Bindery",s:"@stitch/bindery",v:"2.0.0",ap:"hybrid",tr:"curated",lic:"CC0-1.0",
+ pub:"2026-07-08",ins:22410,pl:167280,tags:["wood","thread","glue","warm","dense"],
+ d:"Six sounds drawn from a working bindery, one from each generator in the DSL: awl, thread, press, glue pot, tapping-out block, and the snip. The widest timbral spread in the catalogue.",
+ snd:{"awl":S(T(690,0.024,0.18,{q:4.8,thump:0.24,thumpf:92})),
+      "thread":S(P(392,0.46,{damp:0.9948,bright:0.42})),
+      "press":S(N(200,1400,0.34,{atk:0.04,dec:0.11,curve:0.8})),
+      "glue":S(O(174,REEDY,1.10,{atk:0.22,rel:0.44,vib:0.005,vibrate:3.8})),
+      "block":S(M(330,WOODBAR,0.26,0.50,{hit:0.24})),
+      "snip":S(B(1600,2400,0.06,"tri",{dec:0.022}))},
+ b:[["turn.end","block",null,null],
+    ["session.start","glue",null,null],
+    ["prompt.submit","thread",0.90,null],
+    ["tool.pre","awl",0.20,null],
+    ["tool.post","snip",0.16,null],
+    ["subagent.end","press",0.20,null]]}
+];
+
+/* ---------------- derive bindings maps + coverage ---------------- */
+function buildBindings(pack){
+  const map={};
+  const order=[];
+  for(let i=0;i<pack.b.length;i++){
+    const row=pack.b[i];
+    const ev=row[0], role=EV[ev].role;
+    map[ev]={
+      event:ev,
+      sound:row[1],
+      gain:row[2]===null||row[2]===undefined?ROLE_GAIN[role]:row[2],
+      throttle:ROLE_THROTTLE[role],
+      role:role,
+      fallback:row[3]||[]
+    };
+    order.push(ev);
+  }
+  order.sort(function(a,b){return EV_ORDER[a]-EV_ORDER[b];});
+  return {map:map,order:order};
+}
+function reachability(binding,agent){
+  if(EV[binding.event].support[agent]) return "full";
+  for(let i=0;i<binding.fallback.length;i++){
+    const f=binding.fallback[i];
+    if(EV[f]&&EV[f].support[agent]) return "fall";
+  }
+  return "none";
+}
+function coverageOf(pack){
+  const out={};
+  for(let a=0;a<AGENTS.length;a++){
+    const k=AGENTS[a][0];
+    let full=0,fall=0;
+    for(let i=0;i<pack.order.length;i++){
+      const r=reachability(pack.bindings[pack.order[i]],k);
+      if(r==="full")full++;else if(r==="fall")fall++;
+    }
+    out[k]={full:full,fall:fall,total:pack.order.length};
+  }
+  return out;
+}
+PACKS.forEach(function(p,i){
+  const bb=buildBindings(p);
+  p.bindings=bb.map;
+  p.order=bb.order;
+  p.soundNames=Object.keys(p.snd);
+  p.soundCount=p.soundNames.length;
+  p.cov=coverageOf(p);
+  p.id=p.s;
+  p.no=i+1;
+  p.pubMs=Date.parse(p.pub+"T00:00:00Z");
+});
+
+/* ---------------- PCM cache + peaks ---------------- */
+const PCM={};
+function pcmFor(pack,soundName){
+  const key=pack.s+"@"+pack.v+"/"+soundName;
+  if(!PCM[key]){
+    const doc=pack.snd[soundName];
+    if(!doc) return new Float32Array(1);
+    PCM[key]=renderSdsl(doc,key,1);
+  }
+  return PCM[key];
+}
+const PEAKS={};
+function peaksFor(pack,soundName,bins){
+  const key=pack.s+"@"+pack.v+"/"+soundName+"#"+bins;
+  if(!PEAKS[key]) PEAKS[key]=peaksFrom(pcmFor(pack,soundName),bins);
+  return PEAKS[key];
+}
+
+/* ---------------- audio: gesture-gated, polyphony-capped ---------------- */
+const INK={ctx:null,volume:0.70};
+const BUFS={};
+const voices=[];
+const POLY=6;
+const HOVER_THROTTLE=100;   /* browse-only gate, separate from role throttle */
+let lastHover=0;
+const lastPlay={};          /* per binding key, role throttle */
+
+function inkPress(){
+  if(INK.ctx) return true;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC) return false;
+  try{ INK.ctx=new AC(); }catch(e){ return false; }
+  if(INK.ctx.resume) { try{ INK.ctx.resume(); }catch(e){} }
+  document.body.setAttribute("data-press","inked");
+  return true;
+}
+function bufferFor(pack,soundName){
+  const key=pack.s+"@"+pack.v+"/"+soundName;
+  if(BUFS[key]) return BUFS[key];
+  if(!INK.ctx) return null;
+  const pcm=pcmFor(pack,soundName);
+  const ab=INK.ctx.createBuffer(1,Math.max(1,pcm.length),SR);
+  const ch=ab.getChannelData(0);
+  for(let i=0;i<pcm.length;i++) ch[i]=pcm[i];
+  BUFS[key]=ab;
+  return ab;
+}
+function playBinding(pack,binding,opts){
+  opts=opts||{};
+  if(!INK.ctx) return false;
+  const now=(typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();
+  if(opts.hover){
+    if(now-lastHover<HOVER_THROTTLE) return false;
+    lastHover=now;
+  }
+  const key=pack.s+"|"+binding.event;
+  if(binding.throttle>0&&lastPlay[key]&&now-lastPlay[key]<binding.throttle) return false;
+  lastPlay[key]=now;
+
+  const ab=bufferFor(pack,binding.sound);
+  if(!ab) return false;
+  const src=INK.ctx.createBufferSource();
+  src.buffer=ab;
+  const g=INK.ctx.createGain();
+  g.gain.value=Math.max(0,Math.min(1,binding.gain))*INK.volume;
+  src.connect(g);
+  g.connect(INK.ctx.destination);
+  while(voices.length>=POLY){
+    const old=voices.shift();
+    try{ old.src.stop(0); }catch(e){}
+    if(old.onend) old.onend();
+  }
+  const voice={src:src,gain:g,onend:opts.onend||null};
+  voices.push(voice);
+  src.onended=function(){
+    const i=voices.indexOf(voice);
+    if(i>=0) voices.splice(i,1);
+    if(voice.onend) voice.onend();
+  };
+  try{ src.start(0); }catch(e){}
+  if(opts.onstart) opts.onstart();
+  return true;
+}
+
+/* ---------------- letterpress waveform marks ---------------- */
+function paint(canvas,peaks,color,W,H){
+  const g=canvas.getContext?canvas.getContext("2d"):null;
+  if(!g) return;
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.round(W*dpr));
+  canvas.height=Math.max(1,Math.round(H*dpr));
+  canvas.style.width=W+"px";
+  canvas.style.height=H+"px";
+  if(g.clearRect) g.clearRect(0,0,canvas.width,canvas.height);
+  const mid=Math.round(canvas.height/2);
+  g.fillStyle=color;
+  /* baseline hairline first, bars over it */
+  g.fillRect(0,mid,canvas.width,Math.max(1,Math.round(dpr*0.5)));
+  const bars=peaks.length;
+  const pitch=canvas.width/bars;
+  const bw=Math.max(1,Math.floor(dpr));
+  for(let i=0;i<bars;i++){
+    const x=Math.round(i*pitch);
+    const h=Math.max(Math.round(dpr*0.5),peaks[i]*(canvas.height*0.46));
+    g.fillRect(x,mid-h,bw,h*2);
+  }
+}
+const INK_COLOR="#14120e";
+const RED_COLOR="#a3201a";
+const MARK_W=170, MARK_H=24, MICRO_W=36, MICRO_H=11;
+
+/* ---------------- state ---------------- */
+const ALL_TAGS=(function(){
+  const set={};
+  PACKS.forEach(function(p){p.tags.forEach(function(t){set[t]=(set[t]||0)+1;});});
+  return Object.keys(set).sort();
+})();
+const APPROACHES=["tactile","jingle","bed","hybrid"];
+const TRUSTS=["curated","attested","unverified"];
+const SORTS=[["newest","Newest"],["installed","Most installed"],["played","Most played"]];
+const PER_PAGE=12;
+
+const state={
+  approach:{},           /* set of selected approaches; empty = all */
+  agent:null,            /* 'c'|'x'|'u'|null — complete native coverage on that agent */
+  trust:{curated:true,attested:true,unverified:false},   /* §8.3: unverified withheld */
+  tag:{},
+  sort:"newest",
+  page:1
+};
+
+function selectedKeys(obj){ return Object.keys(obj).filter(function(k){return obj[k];}); }
+
+function matches(p){
+  const ap=selectedKeys(state.approach);
+  if(ap.length&&ap.indexOf(p.ap)<0) return false;
+  if(!state.trust[p.tr]) return false;
+  const tg=selectedKeys(state.tag);
+  if(tg.length){
+    let hit=false;
+    for(let i=0;i<tg.length;i++) if(p.tags.indexOf(tg[i])>=0){hit=true;break;}
+    if(!hit) return false;
+  }
+  if(state.agent){
+    const c=p.cov[state.agent];
+    if(c.full<c.total) return false;
+  }
+  return true;
+}
+function sorted(list){
+  const s=state.sort;
+  const out=list.slice();
+  out.sort(function(a,b){
+    if(s==="installed") return b.ins-a.ins || b.pubMs-a.pubMs;
+    if(s==="played") return b.pl-a.pl || b.pubMs-a.pubMs;
+    return b.pubMs-a.pubMs || b.ins-a.ins;
+  });
+  return out;
+}
+function withheldCount(){
+  if(state.trust.unverified) return 0;
+  let n=0;
+  const saved=state.trust.unverified;
+  state.trust.unverified=true;
+  for(let i=0;i<PACKS.length;i++) if(PACKS[i].tr==="unverified"&&matches(PACKS[i])) n++;
+  state.trust.unverified=saved;
+  return n;
+}
+
+/* ---------------- DOM helpers ---------------- */
+function el(tag,cls,text){
+  const e=document.createElement(tag);
+  if(cls) e.className=cls;
+  if(text!==undefined&&text!==null) e.textContent=text;
+  return e;
+}
+function fmt(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,","); }
+function fmtDate(iso){
+  const m=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const d=new Date(iso+"T00:00:00Z");
+  return d.getUTCDate()+" "+m[d.getUTCMonth()]+" "+d.getUTCFullYear();
+}
+const TRUST_WORD={curated:"Curated.",attested:"Attested.",unverified:"Unverified."};
+
+/* ---------------- filter bar ---------------- */
+function optButton(label,pressed,onClick,extra){
+  const b=el("button","opt"+(extra?" "+extra:""),label);
+  b.type="button";
+  b.setAttribute("aria-pressed",pressed?"true":"false");
+  b.addEventListener("click",onClick);
+  return b;
+}
+function buildFilters(){
+  const ap=document.getElementById("fApproach");
+  ap.textContent="";
+  ap.appendChild(optButton("All",selectedKeys(state.approach).length===0,function(){
+    state.approach={};state.page=1;render();
+  }));
+  APPROACHES.forEach(function(a){
+    ap.appendChild(optButton(a,!!state.approach[a],function(){
+      state.approach[a]=!state.approach[a];
+      if(!state.approach[a]) delete state.approach[a];
+      state.page=1;render();
+    }));
+  });
+
+  const ag=document.getElementById("fAgent");
+  ag.textContent="";
+  ag.appendChild(optButton("Any agent",state.agent===null,function(){state.agent=null;state.page=1;render();}));
+  AGENTS.forEach(function(a){
+    ag.appendChild(optButton(a[1],state.agent===a[0],function(){
+      state.agent=state.agent===a[0]?null:a[0];state.page=1;render();
+    }));
+  });
+
+  const tr=document.getElementById("fTrust");
+  tr.textContent="";
+  TRUSTS.forEach(function(t){
+    tr.appendChild(optButton(t,!!state.trust[t],function(){
+      state.trust[t]=!state.trust[t];state.page=1;render();
+    }));
+  });
+
+  const tg=document.getElementById("fTag");
+  tg.textContent="";
+  tg.appendChild(optButton("All subjects",selectedKeys(state.tag).length===0,function(){
+    state.tag={};state.page=1;render();
+  },"tiny"));
+  ALL_TAGS.forEach(function(t){
+    tg.appendChild(optButton(t,!!state.tag[t],function(){
+      state.tag[t]=!state.tag[t];
+      if(!state.tag[t]) delete state.tag[t];
+      state.page=1;render();
+    },"tiny"));
+  });
+
+  const so=document.getElementById("fSort");
+  so.textContent="";
+  SORTS.forEach(function(s){
+    const b=optButton(s[1],state.sort===s[0],function(){state.sort=s[0];state.page=1;render();});
+    b.setAttribute("aria-current",state.sort===s[0]?"true":"false");
+    so.appendChild(b);
+  });
+}
+
+/* ---------------- one entry ---------------- */
+function coverageLine(p){
+  const wrap=el("div","cov");
+  AGENTS.forEach(function(a){
+    const c=p.cov[a[0]];
+    const seg=el("i");
+    const lab=el("span","ag",a[2]+" ");
+    const n=el("span","n",c.full+"/"+c.total);
+    seg.appendChild(lab);
+    seg.appendChild(n);
+    if(c.fall>0){
+      const sup=document.createElement("sup");
+      sup.textContent="+"+c.fall;
+      sup.title=c.fall+" further hook(s) reachable only through a fallback chain";
+      seg.appendChild(sup);
+    }
+    wrap.appendChild(seg);
+  });
+  return wrap;
+}
+function hookRow(p,ev){
+  const b=p.bindings[ev];
+  const row=el("button","hook role-"+b.role.charAt(0));
+  row.type="button";
+  row.setAttribute("data-pack",p.s);
+  row.setAttribute("data-event",ev);
+  row.setAttribute("data-sound",b.sound);
+  row.setAttribute("data-role",b.role);
+  row.setAttribute("aria-label",ev+" plays "+b.sound+" at gain "+b.gain.toFixed(2));
+  row.title=ev+" → "+b.sound+" · gain "+b.gain.toFixed(2)+" · throttle "+b.throttle+" ms · role "+b.role
+    +(b.fallback.length?" · fallback "+b.fallback.join(" → "):"");
+
+  row.appendChild(el("span","caret"));
+
+  const mid=el("span","ev");
+  mid.appendChild(document.createTextNode(ev+" "));
+  mid.appendChild(el("span","sn",b.sound));
+  row.appendChild(mid);
+
+  const marks=el("span","marks");
+  AGENTS.forEach(function(a){
+    const r=reachability(b,a[0]);
+    const m=el("span","m "+(r==="full"?"m-full":r==="fall"?"m-fall":"m-none"));
+    m.title=a[1]+": "+(r==="full"?"native":r==="fall"?"fallback only":"silent");
+    marks.appendChild(m);
+  });
+  row.appendChild(marks);
+
+  row.appendChild(el("span","gn",b.gain.toFixed(2)));
+
+  const cv=document.createElement("canvas");
+  cv.className="micro";
+  row.appendChild(cv);
+  paint(cv,peaksFor(p,b.sound,18),INK_COLOR,MICRO_W,MICRO_H);
+
+  function light(on){
+    if(on) row.classList.add("is-live"); else row.classList.remove("is-live");
+    paint(cv,peaksFor(p,b.sound,18),on?RED_COLOR:INK_COLOR,MICRO_W,MICRO_H);
+  }
+  function fire(hover){
+    if(!INK.ctx) return;
+    playBinding(p,b,{hover:hover,onstart:function(){light(true);},onend:function(){light(false);}});
+  }
+  row.addEventListener("mouseenter",function(){
+    if(!INK.ctx){ hintPress(); return; }
+    fire(true);
+  });
+  row.addEventListener("focus",function(){ if(INK.ctx) fire(true); });
+  row.addEventListener("click",function(){
+    if(!INK.ctx){ inkPress(); }
+    fire(false);
+  });
+  return row;
+}
+function entryNode(p,ordinal){
+  const a=el("article","entry");
+  a.setAttribute("data-pack",p.s);
+  a.setAttribute("data-trust",p.tr);
+  a.setAttribute("data-approach",p.ap);
+
+  const no=el("span","entry-no fig",(ordinal<10?"0":"")+ordinal);
+  a.appendChild(no);
+
+  const h=el("h2","entry-title"+(p.t.length>44?" long":""),p.t);
+  a.appendChild(h);
+
+  const sub=el("p","entry-sub");
+  const sc=el("span","scope",p.s);
+  sub.appendChild(sc);
+  sub.appendChild(document.createTextNode(" @ "));
+  const ver=el("span","fig",p.v);
+  sub.appendChild(ver);
+  sub.appendChild(document.createTextNode("  ·  "));
+  sub.appendChild(el("span","app",p.ap));
+  a.appendChild(sub);
+
+  const mw=el("div","mark-wrap");
+  const primary=p.bindings["turn.end"]?p.bindings["turn.end"].sound:p.bindings[p.order[0]].sound;
+  const mc=document.createElement("canvas");
+  mc.className="mark";
+  mw.appendChild(mc);
+  a.appendChild(mw);
+  paint(mc,peaksFor(p,primary,MARK_W/2),INK_COLOR,MARK_W,MARK_H);
+
+  const d=el("p","entry-desc");
+  const tw=el("span","trust"+(p.tr==="unverified"?" unverified":""),TRUST_WORD[p.tr]+" ");
+  d.appendChild(tw);
+  d.appendChild(document.createTextNode(p.d));
+  a.appendChild(d);
+
+  const st=el("p","stats");
+  st.innerHTML="";
+  st.appendChild(el("b",null,String(p.soundCount)));
+  st.appendChild(document.createTextNode(" sounds · "));
+  st.appendChild(el("span","fig",fmt(p.ins)));
+  st.appendChild(document.createTextNode(" installs · "));
+  st.appendChild(el("span","fig",fmt(p.pl)));
+  st.appendChild(document.createTextNode(" plays · published "));
+  st.appendChild(el("span","fig",fmtDate(p.pub)));
+  a.appendChild(st);
+
+  a.appendChild(coverageLine(p));
+
+  const hooks=el("div","hooks");
+  const cap=el("div","hooks-cap");
+  cap.appendChild(el("span",null,"Bound hooks — hover to audition"));
+  cap.appendChild(el("span",null,"c x u · gain"));
+  hooks.appendChild(cap);
+  p.order.forEach(function(ev){ hooks.appendChild(hookRow(p,ev)); });
+  a.appendChild(hooks);
+
+  a.appendChild(el("p","tagline",p.tags.join(" · ")));
+
+  const terms=el("p","terms");
+  terms.appendChild(document.createTextNode(p.lic+" · "));
+  terms.appendChild(el("i",null,"tambre install "+p.s));
+  a.appendChild(terms);
+
+  return a;
+}
+
+/* ---------------- render ---------------- */
+let hintTimer=null;
+function hintPress(){
+  const box=document.querySelector(".press");
+  if(!box) return;
+  box.classList.add("hinted");
+  if(hintTimer) clearTimeout(hintTimer);
+  hintTimer=setTimeout(function(){ box.classList.remove("hinted"); },1400);
+}
+function render(){
+  buildFilters();
+
+  const kept=sorted(PACKS.filter(matches));
+  const pages=Math.max(1,Math.ceil(kept.length/PER_PAGE));
+  if(state.page>pages) state.page=pages;
+  const start=(state.page-1)*PER_PAGE;
+  const slice=kept.slice(start,start+PER_PAGE);
+
+  const feed=document.getElementById("feed");
+  feed.textContent="";
+  if(!slice.length){
+    feed.appendChild(el("p","empty","No entries answer to that description. Loosen a filter."));
+  }else{
+    slice.forEach(function(p,i){ feed.appendChild(entryNode(p,start+i+1)); });
+  }
+
+  /* withheld notice (spec §8.3) */
+  const wn=document.getElementById("withheld");
+  const wc=withheldCount();
+  if(wc>0){
+    wn.hidden=false;
+    document.getElementById("withheldText").textContent=
+      wc+(wc===1?" entry is":" entries are")+" withheld from this setting pending attestation of its scope.";
+  }else{
+    wn.hidden=true;
+  }
+
+  /* tally + folio */
+  document.getElementById("tallyLeft").textContent=
+    kept.length+" entries · showing "+(kept.length?(start+1):0)+"–"+(start+slice.length);
+  const totalSounds=kept.reduce(function(s,p){return s+p.soundCount;},0);
+  const totalHooks=kept.reduce(function(s,p){return s+p.order.length;},0);
+  document.getElementById("tallyRight").textContent=
+    totalSounds+" sounds · "+totalHooks+" bound hooks · set in order of "+
+    (state.sort==="newest"?"publication":state.sort==="installed"?"installs":"plays");
+
+  const pg=document.getElementById("pages");
+  pg.textContent="";
+  const prev=el("button","pg step","Previous");
+  prev.type="button";
+  prev.disabled=state.page<=1;
+  prev.addEventListener("click",function(){ if(state.page>1){state.page--;render();} });
+  pg.appendChild(prev);
+  for(let i=1;i<=pages;i++){
+    const b=el("button","pg fig",String(i));
+    b.type="button";
+    b.setAttribute("aria-current",i===state.page?"true":"false");
+    (function(n){ b.addEventListener("click",function(){ state.page=n;render(); }); })(i);
+    pg.appendChild(b);
+  }
+  const next=el("button","pg step","Next");
+  next.type="button";
+  next.disabled=state.page>=pages;
+  next.addEventListener("click",function(){ if(state.page<pages){state.page++;render();} });
+  pg.appendChild(next);
+
+  document.getElementById("contd").textContent=
+    pages>1
+      ? (state.page<pages
+          ? "Catalogue continued on page "+(state.page+1)+" of "+pages+"."
+          : "End of catalogue. Page "+state.page+" of "+pages+".")
+      : "Complete in one page.";
+}
+
+/* ---------------- wiring ---------------- */
+function boot(){
+  const ib=document.getElementById("inkBtn");
+  if(ib) ib.addEventListener("click",function(){ inkPress(); });
+  const wb=document.getElementById("withheldBtn");
+  if(wb) wb.addEventListener("click",function(){
+    state.trust.unverified=true;state.page=1;render();
+  });
+  const vol=document.getElementById("vol");
+  if(vol) vol.addEventListener("input",function(){
+    INK.volume=Math.max(0,Math.min(1,Number(vol.value)/100));
+  });
+  render();
+}
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",boot);
+else boot();
+
+/* expose for headless verification only */
+if(typeof window!=="undefined"){
+  window.__TAMBRE__={PACKS:PACKS,state:state,render:render,renderSdsl:renderSdsl,
+    peaksFrom:peaksFrom,GENS:GENS,INK:INK,voices:voices,playBinding:playBinding,
+    reachability:reachability,EV:EV,pcmFor:pcmFor,inkPress:inkPress,
+    HOVER_THROTTLE:HOVER_THROTTLE,POLY:POLY};
+}
+</script>
+</body>
+</html>

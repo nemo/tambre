@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tambre — a library of interaction design paradigms</title>
+<meta name="description" content="Seven interaction-design treatments of the same marketplace: an open registry of sound packs that bind to AI coding agent lifecycle events.">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header class="sitehead">
+  <a class="home" href="index.html">Tambre</a>
+  <span class="crumb">library of interaction design paradigms</span>
+</header>
+
+<div class="lede">
+  <h1>Seven ways to browse a sound library</h1>
+  <p class="sub">
+    <strong>Tambre</strong> is a proposed open registry of sound packs that bind to AI coding
+    agent lifecycle events — publish a pack once and it works on Claude Code, Codex CLI, and
+    Cursor. Each variant below is a complete, working treatment of the <em>same</em> feed,
+    against the same <a href="spec/index.html">specification</a> and the same required data.
+  </p>
+  <p class="sub">
+    They differ only in interaction design. The point is that the underlying
+    problem — auditioning a set of sounds bound to sixteen lifecycle hooks across three
+    agents — admits radically different answers, and that the choice between them is
+    consequential rather than cosmetic.
+  </p>
+  <p class="sub">
+    Every variant synthesises its audio in the browser from a small JSON sound DSL: six
+    physical-modelling generators, no audio files. Nothing plays until you interact with it.
+    In all seven, <strong>each lifecycle hook has its own sound, and you audition them
+    individually by hovering</strong>.
+  </p>
+  <p class="meta">7 variants · 1 spec · ~500 KB total · no build step · no dependencies</p>
+</div>
+
+<div class="library">
+  <div class="libhead">
+    <h2>The variants</h2>
+    <div class="axispick">
+      <span>Compare by</span>
+      <button data-sort="num" aria-pressed="true">order</button>
+      <button data-sort="density">density</button>
+      <button data-sort="name">name</button>
+    </div>
+  </div>
+  <div id="cards">
+
+  <article class="card" id="01-console-rack">
+    <div class="cardtop">
+      <span class="num">01</span>
+      <h3>Console</h3>
+      <span class="kb">49 KB · single file</span>
+    </div>
+    <p class="one">The feed is a studio mixing desk. Every pack is a channel strip in a rack, and you audition packs the way an engineer solos channels.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>Channel-strip rack — one full-width horizontal strip per pack, stacked vertically, numbered like desk channels. Not a grid, not cards.</dd>
+        <dt>audio interaction</dt><dd>Four-tier: hover a strip = preview <code>turn.end</code>; click a strip = open its patch bay (accordion); hover a pad = play that specific hook's own sound at its bound gain; solo button = every binding in canonical order at 240ms. Master section is a real gain + mute on a live Web Audio graph.</dd>
+        <dt>density</dt><dd>High. 74px strips, ~9 visible per screen, eight columns of information per row. Optimised for scanning a long rack, not for browsing pictures.</dd>
+        <dt>colour</dt><dd>Near-black (#0a0b0c) with a single amber accent (#ffab24) used exclusively for signal — LEDs, waveforms, active state. Approach chips get muted tints as the one exception.</dd>
+        <dt>typography</dt><dd>Monospace for all data (IDs, counts, coverage, status); system sans only for pack titles. Type does no expressive work — it's instrumentation labelling.</dd>
+        <dt>ornament</dt><dd>Hardware affordances: LED arrays, fader tracks, hairline panel rules, a 14-segment master meter. Everything ornamental is also functional.</dd>
+        <dt>motion</dt><dd>Almost none. The master meter reacts to real audio via an AnalyserNode; a strip gets an amber edge while playing. No transitions over 180ms, no scroll animation.</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="01-console-rack" class="primary">Load preview</button>
+      <a class="btn" href="01-console-rack/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="01-console-rack/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="01-console-rack">
+      <div class="framebar">
+        <span>Console — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="01-console-rack">Unload</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" id="02-broadsheet">
+    <div class="cardtop">
+      <span class="num">02</span>
+      <h3>Broadsheet</h3>
+      <span class="kb">62 KB · single file</span>
+    </div>
+    <p class="one">The feed is a printed catalogue page — packs are numbered entries set in three running columns with rules between them, and each entry carries its own footnoted index of bound hooks that you audition by running the cursor down it.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>A classifieds / record-review page in a broadsheet. 24 numbered <em>entries</em>, 12 to a page, set in three columns with a 1px column rule; a masthead, standing matter (editor's note, key to the marks, notice to the reader), an index bar for filters, and a folio with &quot;continued on page 2&quot;. No cards, no grid, no tiles.</dd>
+        <dt>audio interaction</dt><dd>Per-hook, not per-pack. Each hook line is a <code>&lt;button&gt;</code> labelled with the canonical event name, the sound name in italic, three agent-support marks, and the gain as an oldstyle figure. <code>mouseenter</code> plays that hook's own sound through its own gain; click does the same and bypasses the hover gate. Two independent throttles: a global 100 ms browse gate on hover, and the spec's per-role throttle (churn 120 ms, everything else 0).</dd>
+        <dt>density</dt><dd>High and unapologetic. Every entry shows title, scope@version, approach, waveform, description, sound count, installs, plays, publish date, three-agent coverage, its full hook index, subject tags, license and install line. 12 entries × ~5 hooks = ~60 hoverable audition targets on one page, all visible at once, nothing disclosed progressively.</dd>
+        <dt>colour</dt><dd>Warm paper <code>#f4f1ea</code>, ink <code>#14120e</code>, two greys, and exactly one editorial red <code>#a3201a</code> reserved entirely for the sounding state. No dark mode, by fiat.</dd>
+        <dt>typography</dt><dd>Does all the work. Display serif (Iowan Old Style → Palatino → Georgia) for pack titles at 23px; Georgia for running text; letterspaced uppercase Georgia at 9.5–11px for labels and canonical event names; small caps for trust words; Georgia's native oldstyle figures for every number in the document (entry numbers, counts, gains, dates, coverage). Four type sizes and three weights carry the whole hierarchy.</dd>
+        <dt>ornament</dt><dd>Rules only: 6px masthead rule, 3px/2px section rules, 1px hairlines between hook lines and between columns. No shadows, no gradients, no radii, no filled chips. Emphasis is weight, size, italic, small caps, and rule thickness. Waveforms are letterpress marks — 1px ink strokes on a hairline baseline, 170×24 for the pack, 36×11 in each hook row, all drawn from real rendered peaks.</dd>
+        <dt>motion</dt><dd>Essentially none. Hover underlines an event name, fills a 4px ink caret in the margin, and darkens the row's hairline. Live playback swaps the row and its micro-waveform to red. No transitions, no transforms, no reveals.</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="02-broadsheet" class="primary">Load preview</button>
+      <a class="btn" href="02-broadsheet/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="02-broadsheet/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="02-broadsheet">
+      <div class="framebar">
+        <span>Broadsheet — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="02-broadsheet">Unload</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" id="03-ledger">
+    <div class="cardtop">
+      <span class="num">03</span>
+      <h3>Ledger</h3>
+      <span class="kb">59 KB · single file</span>
+    </div>
+    <p class="one">The registry as a ruled account book: one line per pack, seventeen sortable columns, a real 16×3 support matrix drawn at 4 px per cell, and expandable sub-rows where every bound hook is its own line with its own gain, its own waveform, and its own sound under the cursor.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>Financial ledger / spreadsheet. You are reconciling 26 packs against 16 events, not shopping. Row ordinals continue across pages like an account book's line numbers.</dd>
+        <dt>audio interaction</dt><dd>Hover any line to audition it; pack lines play their primary cue, hook lines play exactly that hook's sound at that hook's gain. <code>space</code> plays the cursor line, <code>[</code> / <code>]</code> sweep down a pack's hooks auditioning each. Hover has its own 100 ms throttle, separate from the role throttle.</dd>
+        <dt>density</dt><dd>19 px rows, 2 px vertical padding. 20 rows in the default feed, 25 per page with the trust filter open, <code>rows: all</code> for 26 + 220 hook lines = 246 lines on one scroll. The densest variant in the library.</dd>
+        <dt>colour</dt><dd>Two functional hues on a near-white ground (<code>#fdfdfc</code>). Indigo <code>#2323a8</code> marks the sorted column — header label, caret, bottom hairline, and the cells in that column. Ledger red <code>#b3261e</code> marks the row that is currently sounding. Nothing else is coloured.</dd>
+        <dt>typography</dt><dd>Monospace everywhere — titles, scopes, tags, numbers. <code>font-variant-numeric: tabular-nums</code> globally. 11 px, 1.32 line-height. Approach and trust are single letterforms (<code>T J B H</code> / <code>· † ‡</code>), never coloured pills.</dd>
+        <dt>ornament</dt><dd>Hairlines only (<code>#e4e4e0</code> cell rules, <code>#c6c6c0</code> section rules). Zebra striping on alternate pack rows. No cards, no shadows, no radii, no gradients, no fills behind text. The only graphics are the coverage matrix and the waveform strips, and both are data.</dd>
+        <dt>motion</dt><dd>None. No transitions, no animations, no keyframes anywhere in the file. The playing row gets a 90 ms class swap with no easing — a single blink, like a terminal cell repainting.</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="03-ledger" class="primary">Load preview</button>
+      <a class="btn" href="03-ledger/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="03-ledger/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="03-ledger">
+      <div class="framebar">
+        <span>Ledger — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="03-ledger">Unload</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" id="04-stack">
+    <div class="cardtop">
+      <span class="num">04</span>
+      <h3>Stack</h3>
+      <span class="kb">65 KB · single file</span>
+    </div>
+    <p class="one">One pack fills the viewport as a full-bleed card in a deck you move through a card at a time, the whole screen takes the colour of that pack's approach, and the pack's bound hooks sit across the bottom as a row of large targets you sweep like an instrument.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>A deck of cards. Exactly one pack in the spotlight; two peeking cards behind it at increasing offset/rotation carry depth-of-stack. Advance with ←/→, drag/swipe, or the two edge buttons. Position indicator (<code>07 / 20</code>) replaces scroll entirely.</dd>
+        <dt>audio interaction</dt><dd>Per-hook auditioning is the primary interaction, not a secondary one. Hover or keyboard-focus any hook target → it plays <em>that hook's own sound</em> and the hero waveform morphs to it. Click plays without the hover gate. Advancing the deck auto-plays the new pack's <code>turn.end</code> (defeatable via the <code>auto-cue</code> toggle). Hover preview has its own 100ms throttle, separate from the binding's role throttle.</dd>
+        <dt>density</dt><dd>Deliberately minimal — one record per screen. Twenty-four packs are reachable only through navigation, the scrubber, or the index sheet. The one dense region is the hook organ, and that density is per-pack, not per-registry.</dd>
+        <dt>colour</dt><dd>The loudest in the library. Four saturated full-screen palettes keyed to <code>approach</code>: tactile = vermilion <code>#C0331A</code>, jingle = chrome yellow <code>#F0C000</code> on near-black ink, bed = deep teal <code>#0B5E63</code>, hybrid = violet <code>#5C1AA8</code>. Each carries its own accent (<code>--hot</code>) used for the curated badge, the playhead, and the scrubber's current tick. Background is a radial two-stop of the palette; the card is a translucent scrim over it.</dd>
+        <dt>typography</dt><dd>One heavy grotesque, weight 800, tracking −0.042em, line-height 0.87. Pack name at 64–164px depending on length. Mono (<code>ui-monospace</code>) for every machine string: canonical event names, gains, throttles, coverage counts, the install command.</dd>
+        <dt>ornament</dt><dd>Waveforms only, but big: a 132px-tall hero canvas at full card width (~200 mirrored peak bars) plus a 40-bar sparkline inside every hook tile. No icons, no illustration, no gradients other than the background wash and the card scrim.</dd>
+        <dt>motion</dt><dd>The differentiator. Card deals in with a 260ms translate+scale+rotate (direction-aware), the whole background cross-fades between approach palettes in 260ms, the hero waveform runs a real playhead sweep lighting bars in the accent colour as the buffer plays, hook tiles lift 3px and invert on hover, drag translates and rotates the card under the pointer. Everything under 300ms. <code>prefers-reduced-motion</code> kills the deal animation, the drag transform, and the rAF playhead loop (the waveform still repaints statically).</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="04-stack" class="primary">Load preview</button>
+      <a class="btn" href="04-stack/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="04-stack/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="04-stack">
+      <div class="framebar">
+        <span>Stack — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="04-stack">Unload</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" id="05-session">
+    <div class="cardtop">
+      <span class="num">05</span>
+      <h3>Session</h3>
+      <span class="kb">94 KB · single file</span>
+    </div>
+    <p class="one">A DAW arrangement view of one 62-second agent session: 175 hook events laid out along a time ruler, two lanes loaded with two packs, scrub the playhead and hear what a <em>working session</em> actually sounds like instead of what one chime sounds like.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>Audio-editor arrangement. Time is the x-axis; a pack is a <em>layer</em> you load onto it. Browsing = swapping which pack occupies lane A or lane B and re-scrubbing the same moments. The pack list is demoted to a loader below the timeline.</dd>
+        <dt>audio interaction</dt><dd>Three tiers. (1) Transport — play/pause/stop/scrub/loop plays the whole session through the loaded packs. (2) Marker hover — auditions exactly that hook, in context, with its own 100 ms throttle. (3) Hook index hover — sweeps every distinct binding without hunting along the axis. Gesture gate is the play button.</dd>
+        <dt>density</dt><dd>Moderate-to-dense in the timeline (175 markers × 2 lanes = 350 hit targets), deliberately airy in the two detail panels, medium in the chooser (6 rows/page). The timeline occupies the fold; everything else is below it.</dd>
+        <dt>colour</dt><dd>Cool desaturated blue-grey light editor theme. Paper <code>#e8edf1</code>, panels white, ink <code>#16212b</code>. Exactly two saturated hues, and they are <em>identity</em> not decoration: lane A steel teal <code>#1e6f8b</code>, lane B muted violet <code>#6a5c94</code>. Playhead is the only warm mark on the page (<code>#c0392b</code>). Silence is <code>#b3c0ca</code>; unsupported is lighter still.</dd>
+        <dt>typography</dt><dd>System sans for prose, <code>ui-monospace</code> for everything that is a machine fact — canonical event names, gains, throttles, coverage counts, timecode. Nothing decorative. 9–13 px; the type is instrumentation, not voice.</dd>
+        <dt>ornament</dt><dd>None. Waveforms and the grid are the only non-informational marks, and both are load-bearing. No shadows over 2 px, no gradients except the 1 px second-grid, no rounded corners beyond 2 px.</dd>
+        <dt>motion</dt><dd>Functional only: the playhead translates, markers get a 2 px halo for 140 ms as they fire, the muted lane drops to 42% opacity. No transitions on hover, no entrance animation, nothing eases.</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="05-session" class="primary">Load preview</button>
+      <a class="btn" href="05-session/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="05-session/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="05-session">
+      <div class="framebar">
+        <span>Session — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="05-session">Unload</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" id="06-field">
+    <div class="cardtop">
+      <span class="num">06</span>
+      <h3>Field</h3>
+      <span class="kb">87 KB · single file</span>
+    </div>
+    <p class="one">The registry as a 2D map of sound-space, where every pack sits at coordinates measured from its own rendered audio, and you browse by sweeping your cursor across regions rather than by reading names.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>Scatter field / spatial map. Not a list, grid, rack, deck or timeline — a plotted plane where position <em>is</em> the index. You navigate to &quot;dry and quiet&quot; as a place.</dd>
+        <dt>audio interaction</dt><dd>Sweep-to-audition. Moving the cursor plays the <code>turn.end</code> of nearby packs with gain falling off as <code>(1 − d/150)^1.7</code>. Selecting a node opens a satellite ring of its bound hooks, each individually hoverable.</dd>
+        <dt>density</dt><dd>Sparse. 24 nodes across an 810 × 562 plot; median nearest-neighbour distance 53 px. Whitespace is the medium — it is what makes proximity mean anything.</dd>
+        <dt>colour</dt><dd>Deep ink-teal field (<code>#04141b</code>) with cool bright nodes: mint <code>#63e6c8</code> (tactile/hybrid), ice <code>#7cc9ff</code> (jingle), violet <code>#c9a6ff</code> (bed), rose only for unreachable coverage. No amber, no cream, no light mode.</dd>
+        <dt>typography</dt><dd>Mono everywhere for data and chrome (<code>ui-monospace</code>), system sans only for pack descriptions and titles. Labels are 8–10 px; the whole interface is a measuring instrument, not a magazine.</dd>
+        <dt>ornament</dt><dd>Only the axes, the grid, the leader lines to displaced nodes, and the waveform in the panel. No cards, no borders around content, no shadows.</dd>
+        <dt>motion</dt><dd>Nodes settle in with a 340 ms stagger (9 ms per node) on load; glyph fill transitions 160 ms on proximity. Nothing else moves — sorting deliberately does <em>not</em> animate positions. All of it off under <code>prefers-reduced-motion</code>.</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="06-field" class="primary">Load preview</button>
+      <a class="btn" href="06-field/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="06-field/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="06-field">
+      <div class="framebar">
+        <span>Field — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="06-field">Unload</button>
+      </div>
+    </div>
+  </article>
+
+  <article class="card" id="07-pedalboard">
+    <div class="cardtop">
+      <span class="num">07</span>
+      <h3>Pedalboard</h3>
+      <span class="kb">84 KB · single file</span>
+    </div>
+    <p class="one">The registry as a wall of guitar effects pedals: each pack is a painted stompbox whose footswitches <em>are</em> its bound hooks, so auditioning a specific event means stomping the switch with that event silkscreened on it.</p>
+    <div class="axes collapsed" data-axes>
+      <dl>
+        <dt>browse metaphor</dt><dd>A shelf/wall of effects pedals. Enclosure size is a data channel: hook count drives grid span (≤6 hooks = 1 column, 7–9 = 2, 10–14 = 3). Brass Tacks binds 14 and is a triple-wide box; Dead Room binds 2 and is a stompbox. Filters are a control panel: rotary approach selector, toggle-switch agent bank, trust toggles with a literal &quot;drawer&quot;, a 1/4&quot; jack patch bay for tags, a three-position slide switch for sort. Paging is a pair of pager footswitches with shelf LEDs.</dd>
+        <dt>audio interaction</dt><dd>One labelled footswitch per bound hook. <code>pointerover</code> plays that hook's sound; click plays it and visibly depresses the switch; Enter/Space plays it from the keyboard. The switch LED and the pedal's status LED light. The pedal's scope window redraws to that sound's waveform and the caption changes to <code>event · sound</code>. The LCD prints the full canonical event name, the sound name, the exact gain, the throttle, the role, and per-agent reachability. Gate is a red rectangular mains rocker (deliberately not a round button). Hover has its own 100 ms throttle; role throttle (churn 120 ms) is separate and additional.</dd>
+        <dt>density</dt><dd>Deliberately low per-pack, high per-screen. 8 pedals per shelf. Each pedal carries 2–14 switches, so a shelf can show 60+ individually auditionable hooks. Much lower information-per-pixel than variant 03's table; far higher <em>interactive surface</em> per pixel.</dd>
+        <dt>colour</dt><dd>Saturated and varied — 14 enclosure finishes (cream, sand, tangerine, oxblood, teal, grape, olive, seafoam, charcoal, hammertone, mustard, sky, copper, rose, midnight). Approach informs the family (bed → cool/dark, jingle → hot/metallic, tactile → cream/earth, hybrid → two-tone/sparkle) but no two adjacent pedals read alike. Board is a dark pegboard; hardware is brushed steel; LEDs are amber and red; the LCD readout is phosphor green.</dd>
+        <dt>typography</dt><dd>Chunky condensed uppercase for silkscreen (<code>Arial Narrow</code>/<code>Helvetica Neue Condensed</code>/Impact stack, tight letter-spacing, embossed text-shadow against the enclosure colour). Monospace for the small printed data — scope, gain values, spec plate. Long titles step down through three size classes rather than clipping. Footswitch faces are small-caps abbreviations (<code>PERM·REQ</code>); a LEGEND toggle swaps every face to the full canonical name.</dd>
+        <dt>ornament</dt><dd>Maximal and load-bearing: bevelled enclosure edges, CSS-gradient powder-coat plus an <code>feTurbulence</code> noise overlay, hammertone finish on one pedal, four slotted screws per box at pseudo-random rotations, a status LED per pedal, per-switch LEDs, three coverage lamps per switch, a stamped trust seal, a knurled volume knob, a per-switch mini-knob indicating gain, and an oscilloscope window showing the real rendered waveform.</dd>
+        <dt>motion</dt><dd>Mechanical and short. Footswitches sink 2 px on hover and 5 px on press with the drop-shadow collapsing under them (70 ms, overshoot easing). Toggles snap (90 ms). Rotary pointer sweeps (120 ms). LEDs fade in 80 ms and hold 180 ms. Pedals lift 2 px on hover. Nothing over 130 ms. <code>prefers-reduced-motion</code> kills all transitions <em>and</em> the enclosure tilt.</dd>
+      </dl>
+    </div>
+    <div class="actions">
+      <button data-preview="07-pedalboard" class="primary">Load preview</button>
+      <a class="btn" href="07-pedalboard/index.html" target="_blank" rel="noopener">Open full page ↗</a>
+      <a class="btn" href="07-pedalboard/notes.html">Design notes</a>
+      <button data-axes-toggle>Show all seven axes</button>
+    </div>
+    <div class="framewrap" hidden data-frame="07-pedalboard">
+      <div class="framebar">
+        <span>Pedalboard — live, in an iframe</span>
+        <span class="hint">click inside to enable its audio</span>
+        <span style="flex:1"></span>
+        <button data-unload="07-pedalboard">Unload</button>
+      </div>
+    </div>
+  </article>
+  </div>
+
+  <div class="note">
+    <p><strong>On what has and hasn't been verified.</strong> Every variant was checked
+    programmatically: its audio renders without silence, NaN, or peaks above −1 dBFS; all six
+    generators are exercised; per-hook hover auditioning fires the right sound; no audio starts
+    before the gesture gate; and the DOM raises zero console errors. <em>None of them was ever
+    opened in a browser during construction</em> — visual layout, colour, motion, and texture
+    are unverified. The design notes for each variant say so, and say what else is wrong
+    with it.</p>
+  </div>
+</div>
+
+<footer class="sitefoot">
+  <span><a href="spec/index.html">Specification</a> · <a href="https://github.com/nemo/tambre">Source</a></span>
+  <span>Tambre — an open registry for AI agent sound packs</span>
+</footer>
+
+<script>
+/* click-to-load previews: seven eager iframes would boot seven Web Audio graphs
+   and render ~600 sounds, so frames are created only on request. */
+document.addEventListener('click', function (e) {
+  var t = e.target;
+
+  var slug = t.getAttribute && t.getAttribute('data-preview');
+  if (slug) {
+    var wrap = document.querySelector('[data-frame="' + slug + '"]');
+    if (!wrap.querySelector('iframe')) {
+      var f = document.createElement('iframe');
+      f.setAttribute('src', slug + '/index.html');
+      f.setAttribute('title', slug + ' preview');
+      f.setAttribute('loading', 'lazy');
+      wrap.appendChild(f);
+    }
+    wrap.hidden = false;
+    t.textContent = 'Reload preview';
+    wrap.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return;
+  }
+
+  var un = t.getAttribute && t.getAttribute('data-unload');
+  if (un) {
+    var w = document.querySelector('[data-frame="' + un + '"]');
+    var fr = w.querySelector('iframe');
+    if (fr) fr.remove();           // removing the frame tears down its AudioContext
+    w.hidden = true;
+    var btn = document.querySelector('[data-preview="' + un + '"]');
+    if (btn) btn.textContent = 'Load preview';
+    return;
+  }
+
+  if (t.hasAttribute && t.hasAttribute('data-axes-toggle')) {
+    var box = t.closest('.card').querySelector('[data-axes]');
+    var open = !box.classList.contains('collapsed');
+    box.classList.toggle('collapsed', open);
+    t.textContent = open ? 'Show all seven axes' : 'Show fewer axes';
+    return;
+  }
+
+  var sort = t.getAttribute && t.getAttribute('data-sort');
+  if (sort) {
+    document.querySelectorAll('[data-sort]').forEach(function (b) { b.setAttribute('aria-pressed', 'false'); });
+    t.setAttribute('aria-pressed', 'true');
+    var host = document.getElementById('cards');
+    var list = Array.prototype.slice.call(host.children);
+    var key = {
+      num: function (el) { return el.querySelector('.num').textContent.trim(); },
+      name: function (el) { return el.querySelector('h3').textContent.trim().toLowerCase(); },
+      density: function (el) {
+        var dts = el.querySelectorAll('[data-axes] dt');
+        for (var i = 0; i < dts.length; i++) {
+          if (dts[i].textContent.trim() === 'density') return dts[i].nextElementSibling.textContent.trim().toLowerCase();
+        }
+        return '';
+      }
+    }[sort];
+    list.sort(function (a, b) { return key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0; });
+    list.forEach(function (el) { host.appendChild(el); });
+  }
+});
+</script>
+</body>
+</html>

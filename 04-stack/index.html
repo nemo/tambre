@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tambre — Stack</title>
+<style>
+/* ============================================================
+   TAMBRE — variant 04 "STACK"
+   Browse metaphor: a deck of cards, moved through one at a time.
+   One pack fills the viewport. Approach colours the whole screen.
+   ============================================================ */
+
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --display:"Helvetica Neue",Helvetica,Arial,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+
+/* ---- the four approach palettes. Bold on purpose. ---- */
+[data-ap="tactile"]{--bg:#C0331A;--bg2:#7E1B08;--ink:#FFF0E2;--dim:#FFBE9A;--hot:#FFD166;--onhot:#3A0E02}
+[data-ap="jingle"] {--bg:#F0C000;--bg2:#B98B00;--ink:#1B1305;--dim:#5E4707;--hot:#2417C9;--onhot:#FFF4CC}
+[data-ap="bed"]    {--bg:#0B5E63;--bg2:#03383D;--ink:#DAFBF2;--dim:#7ACFC1;--hot:#79F0C6;--onhot:#04302C}
+[data-ap="hybrid"] {--bg:#5C1AA8;--bg2:#340C66;--ink:#F7E8FF;--dim:#C9A2F0;--hot:#FF4FD8;--onhot:#2B0038}
+
+html,body{height:100%}
+body{
+  font-family:var(--display);
+  background:#151515;color:#fff;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+#app{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  background:radial-gradient(120% 100% at 78% 8%,var(--bg2) 0%,var(--bg) 58%,var(--bg) 100%);
+  color:var(--ink);
+  transition:background-color .26s var(--ease);
+}
+@media (prefers-reduced-motion:reduce){
+  #app,*{transition:none !important;animation:none !important}
+}
+
+/* ---------------- top rail: filters + sort ---------------- */
+#rail{
+  flex:0 0 auto;display:flex;align-items:center;gap:18px;
+  padding:14px 26px 12px;flex-wrap:wrap;
+  border-bottom:1px solid color-mix(in srgb,var(--ink) 22%,transparent);
+}
+.brand{
+  font-weight:800;font-size:19px;letter-spacing:-.05em;
+  text-transform:uppercase;padding-right:6px;
+}
+.brand small{
+  display:block;font-size:9px;font-weight:700;letter-spacing:.22em;
+  opacity:.62;text-transform:uppercase;margin-top:2px;
+}
+.grp{display:flex;align-items:center;gap:6px}
+.grp>label{
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  opacity:.6;margin-right:2px;
+}
+.chip{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+  text-transform:uppercase;
+  padding:6px 9px;border-radius:2px;cursor:pointer;
+  background:color-mix(in srgb,var(--ink) 9%,transparent);
+  border:1px solid color-mix(in srgb,var(--ink) 26%,transparent);
+  color:var(--ink);
+  transition:background-color .12s var(--ease),color .12s var(--ease);
+}
+.chip:hover{background:color-mix(in srgb,var(--ink) 20%,transparent)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+.chip.hotstate[aria-pressed="true"]{background:var(--hot);color:var(--onhot);border-color:var(--hot)}
+.spacer{flex:1 1 auto}
+#volume{width:88px;accent-color:var(--hot)}
+.railnote{font-family:var(--mono);font-size:9.5px;opacity:.6;letter-spacing:.08em}
+
+/* ---------------- stage: the deck ---------------- */
+#stage{
+  position:relative;flex:1 1 auto;min-height:0;
+  display:flex;align-items:stretch;justify-content:center;
+  padding:22px 26px 6px;
+  touch-action:pan-y;
+}
+.peek{
+  position:absolute;left:50%;top:26px;bottom:16px;
+  width:min(1180px,calc(100% - 52px));
+  transform-origin:50% 100%;
+  border-radius:5px;
+  border:1px solid rgba(0,0,0,.22);
+  box-shadow:0 18px 46px rgba(0,0,0,.30);
+  overflow:hidden;pointer-events:none;
+}
+.peek .pt{
+  position:absolute;left:26px;bottom:14px;right:26px;
+  font-weight:800;font-size:26px;letter-spacing:-.03em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85;
+}
+.peek .ps{
+  position:absolute;left:26px;top:14px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;opacity:.7;
+}
+
+#card{
+  position:relative;z-index:3;
+  width:min(1180px,100%);
+  display:flex;flex-direction:column;gap:0;
+  padding:26px 30px 20px;
+  border-radius:5px;
+  background:linear-gradient(168deg,
+      color-mix(in srgb,var(--ink) 12%,transparent) 0%,
+      color-mix(in srgb,var(--ink) 5%,transparent) 42%,
+      color-mix(in srgb,var(--bg2) 55%,transparent) 100%);
+  border:1px solid color-mix(in srgb,var(--ink) 30%,transparent);
+  box-shadow:0 26px 70px rgba(0,0,0,.38), 0 2px 0 color-mix(in srgb,var(--ink) 16%,transparent) inset;
+  overflow:hidden;
+}
+#card.dealR{animation:dealR .26s var(--ease) both}
+#card.dealL{animation:dealL .26s var(--ease) both}
+@keyframes dealR{from{opacity:.2;transform:translateX(70px) scale(.955) rotate(1.1deg)}to{opacity:1;transform:none}}
+@keyframes dealL{from{opacity:.2;transform:translateX(-70px) scale(.955) rotate(-1.1deg)}to{opacity:1;transform:none}}
+#card.sounding{border-color:var(--hot);box-shadow:0 26px 70px rgba(0,0,0,.38),0 0 0 1px var(--hot) inset}
+
+/* ---- card head ---- */
+.eyebrow{
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;
+}
+.eyebrow .scope{font-weight:700;font-size:13px;letter-spacing:0}
+.badge{
+  font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;
+  padding:3px 7px;border-radius:2px;
+  border:1px solid color-mix(in srgb,var(--ink) 40%,transparent);
+}
+.badge.curated{background:var(--hot);color:var(--onhot);border-color:var(--hot);font-weight:700}
+.badge.attested{background:color-mix(in srgb,var(--ink) 16%,transparent)}
+.badge.unverified{opacity:.72;border-style:dashed}
+.approachword{
+  margin-left:auto;font-weight:800;font-size:13px;letter-spacing:.26em;
+  text-transform:uppercase;opacity:.85;
+}
+h1#title{
+  font-weight:800;line-height:.87;letter-spacing:-.042em;
+  margin:10px 0 8px;
+  overflow-wrap:break-word;hyphens:none;
+}
+#desc{
+  font-size:15.5px;line-height:1.42;max-width:62ch;
+  color:color-mix(in srgb,var(--ink) 86%,transparent);
+}
+
+/* ---- hero waveform ---- */
+#hero-wrap{margin:16px 0 2px;flex:0 0 auto}
+#hero-cap{
+  display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;opacity:.78;margin-bottom:6px;
+}
+#hero-cap b{font-size:15px;letter-spacing:0;text-transform:none;font-weight:800;opacity:1}
+#hero-cap .ev{color:var(--hot);font-weight:700;letter-spacing:.04em;text-transform:none;font-size:12px}
+#hero{
+  display:block;width:100%;height:132px;
+  border-top:1px solid color-mix(in srgb,var(--ink) 28%,transparent);
+  border-bottom:1px solid color-mix(in srgb,var(--ink) 28%,transparent);
+}
+
+/* ---- the hook organ: the point of the whole variant ---- */
+#organ-head{
+  display:flex;align-items:baseline;gap:12px;margin:16px 0 8px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+}
+#organ-head strong{font-size:11px;letter-spacing:.2em}
+#organ-head span{opacity:.6}
+#organ{
+  display:flex;flex-wrap:wrap;gap:7px;
+  overflow:auto;min-height:0;padding-bottom:4px;
+}
+.hook{
+  flex:1 1 150px;max-width:210px;min-width:132px;
+  text-align:left;cursor:pointer;
+  padding:8px 9px 6px;border-radius:3px;
+  background:color-mix(in srgb,var(--ink) 7%,transparent);
+  border:1px solid color-mix(in srgb,var(--ink) 24%,transparent);
+  color:var(--ink);font-family:var(--display);
+  transition:transform .12s var(--ease),background-color .12s var(--ease),color .12s var(--ease);
+}
+.hook .hev{
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;opacity:.82;
+  display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hook .hsnd{
+  display:block;font-weight:800;font-size:17px;letter-spacing:-.02em;margin:1px 0 2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.hook .hmeta{
+  font-family:var(--mono);font-size:9px;letter-spacing:.05em;opacity:.72;
+  display:flex;gap:7px;align-items:center;
+}
+.hook canvas{display:block;width:100%;height:20px;margin-top:4px;opacity:.85}
+.hook .dots{display:inline-flex;gap:3px;margin-left:auto}
+.hook .dots i{
+  width:6px;height:6px;border-radius:50%;display:block;
+  border:1px solid color-mix(in srgb,var(--ink) 55%,transparent);
+}
+.hook .dots i.native{background:var(--ink);border-color:var(--ink)}
+.hook .dots i.via{background:repeating-linear-gradient(45deg,currentColor 0 1px,transparent 1px 2px);opacity:.9}
+.hook:hover,.hook.focused{
+  background:var(--ink);color:var(--bg);border-color:var(--ink);
+  transform:translateY(-3px);
+}
+.hook:hover .hev,.hook.focused .hev,
+.hook:hover .hmeta,.hook.focused .hmeta{opacity:.78}
+.hook:hover .dots i,.hook.focused .dots i{border-color:color-mix(in srgb,var(--bg) 60%,transparent)}
+.hook:hover .dots i.native,.hook.focused .dots i.native{background:var(--bg);border-color:var(--bg)}
+.hook.ringing{background:var(--hot);color:var(--onhot);border-color:var(--hot)}
+.hook:focus-visible{outline:2px solid var(--hot);outline-offset:2px}
+
+/* ---- card foot: stats + coverage + install ---- */
+#cardfoot{
+  margin-top:auto;padding-top:14px;
+  border-top:1px solid color-mix(in srgb,var(--ink) 24%,transparent);
+  display:flex;gap:26px;align-items:flex-end;flex-wrap:wrap;
+}
+.stats{display:flex;gap:22px;flex-wrap:wrap}
+.stat{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.66}
+.stat b{
+  display:block;font-family:var(--display);font-size:21px;font-weight:800;
+  letter-spacing:-.02em;opacity:1;text-transform:none;
+  font-variant-numeric:tabular-nums;
+}
+.cov{display:flex;gap:10px;flex-wrap:wrap}
+.covcell{
+  min-width:104px;padding:6px 9px;border-radius:3px;
+  background:color-mix(in srgb,var(--ink) 9%,transparent);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+}
+.covcell b{
+  display:block;font-family:var(--display);font-size:19px;font-weight:800;letter-spacing:-.02em;
+  text-transform:none;font-variant-numeric:tabular-nums;
+}
+.covcell em{font-style:normal;opacity:.66;font-size:9px}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:2px}
+.tag{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;
+  padding:3px 6px;border-radius:2px;
+  border:1px solid color-mix(in srgb,var(--ink) 26%,transparent);opacity:.85;
+}
+#install{
+  display:flex;align-items:center;gap:8px;margin-left:auto;
+  font-family:var(--mono);font-size:11px;
+  padding:7px 9px;border-radius:3px;
+  background:color-mix(in srgb,var(--ink) 10%,transparent);
+  border:1px solid color-mix(in srgb,var(--ink) 26%,transparent);
+}
+#copybtn{
+  font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  cursor:pointer;background:var(--ink);color:var(--bg);border:0;border-radius:2px;padding:4px 7px;font-weight:700;
+}
+
+/* ---------------- nav ---------------- */
+.nav{
+  position:absolute;top:50%;transform:translateY(-50%);z-index:6;
+  width:44px;height:76px;border-radius:3px;cursor:pointer;
+  background:color-mix(in srgb,var(--ink) 14%,transparent);
+  border:1px solid color-mix(in srgb,var(--ink) 32%,transparent);
+  color:var(--ink);font-size:18px;font-weight:800;
+  transition:background-color .12s var(--ease)}
+.nav:hover{background:var(--ink);color:var(--bg)}
+#prev{left:2px}
+#next{right:2px}
+
+/* ---------------- foot: position + scrubber ---------------- */
+#foot{
+  flex:0 0 auto;display:flex;align-items:center;gap:20px;
+  padding:8px 26px 14px;
+}
+#pos{
+  font-weight:800;font-size:30px;letter-spacing:-.04em;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+#pos small{font-size:13px;opacity:.6;font-weight:700;letter-spacing:0}
+#scrub{
+  flex:1 1 auto;display:flex;align-items:flex-end;gap:2px;height:34px;
+}
+#scrub .tick{
+  flex:1 1 auto;min-width:3px;height:9px;cursor:pointer;border:0;padding:0;
+  background:color-mix(in srgb,var(--ink) 34%,transparent);
+  transition:height .12s var(--ease),background-color .12s var(--ease);
+}
+#scrub .tick:hover{height:22px;background:var(--ink)}
+#scrub .tick.here{height:34px;background:var(--hot)}
+#scrub .tick.a-tactile{background-image:none}
+#indexBtn{white-space:nowrap}
+
+/* ---------------- gesture gate: the face-down deck ---------------- */
+#gate{
+  position:fixed;inset:0;z-index:40;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:30px;
+  background:#0E0D0C;color:#F6F1E8;cursor:pointer;
+}
+#gate .fan{position:relative;width:340px;height:196px}
+#gate .fan i{
+  position:absolute;left:50%;top:0;width:150px;height:190px;border-radius:6px;
+  transform-origin:50% 100%;display:block;
+  box-shadow:0 14px 40px rgba(0,0,0,.5);
+  border:1px solid rgba(255,255,255,.14);
+}
+#gate .fan i:nth-child(1){background:#C0331A;transform:translateX(-50%) rotate(-15deg)}
+#gate .fan i:nth-child(2){background:#F0C000;transform:translateX(-50%) rotate(-5deg)}
+#gate .fan i:nth-child(3){background:#0B5E63;transform:translateX(-50%) rotate(5deg)}
+#gate .fan i:nth-child(4){background:#5C1AA8;transform:translateX(-50%) rotate(15deg)}
+#gate h2{font-size:clamp(32px,5vw,64px);font-weight:800;letter-spacing:-.04em;line-height:.94;text-align:center}
+#gate p{font-family:var(--mono);font-size:12px;letter-spacing:.1em;opacity:.7;text-align:center;max-width:46ch;line-height:1.7}
+#cut{
+  font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;
+  padding:14px 26px;border-radius:3px;border:1px solid #F6F1E8;background:#F6F1E8;color:#0E0D0C;
+  font-weight:700;cursor:pointer;
+}
+#cut:hover{background:#FFD166;border-color:#FFD166}
+
+/* ---------------- index sheet (overview / jump-to) ---------------- */
+#sheet{
+  position:fixed;inset:0;z-index:30;overflow:auto;
+  background:color-mix(in srgb,var(--bg2) 92%,#000);
+  padding:22px 26px 40px;
+}
+#sheet[hidden]{display:none}
+#sheethead{
+  display:flex;align-items:baseline;gap:16px;margin-bottom:16px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+}
+#sheethead h3{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-.03em;text-transform:none}
+#sheetgrid{
+  display:grid;gap:8px;
+  grid-template-columns:repeat(auto-fill,minmax(216px,1fr));
+}
+.icard{
+  text-align:left;cursor:pointer;padding:10px 11px;border-radius:3px;
+  border:1px solid rgba(255,255,255,.2);color:#fff;
+  background:color-mix(in srgb,var(--ink) 8%,transparent);
+  transition:transform .12s var(--ease)}
+.icard:hover{transform:translateY(-2px)}
+.icard.here{outline:2px solid var(--hot)}
+.icard .n{font-family:var(--mono);font-size:9px;letter-spacing:.14em;opacity:.6}
+.icard .t{font-weight:800;font-size:15px;letter-spacing:-.02em;line-height:1.12;margin:3px 0}
+.icard .s{font-family:var(--mono);font-size:9.5px;opacity:.72}
+.icard .swatch{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:baseline}
+.sw-tactile{background:#C0331A}.sw-jingle{background:#F0C000}.sw-bed{background:#0B5E63}.sw-hybrid{background:#5C1AA8}
+
+#empty{
+  display:none;flex-direction:column;gap:10px;align-self:center;text-align:center;
+}
+#empty h2{font-size:44px;font-weight:800;letter-spacing:-.04em}
+#empty p{font-family:var(--mono);font-size:12px;opacity:.7}
+#app.noresults #card,#app.noresults .peek,#app.noresults .nav{display:none}
+#app.noresults #empty{display:flex}
+
+@media (max-width:820px){
+  #rail{gap:10px;padding:10px 14px}
+  #stage{padding:14px 14px 4px}
+  #card{padding:18px 16px 14px}
+  #hero{height:96px}
+  .hook{flex:1 1 44%;max-width:none}
+  #foot{padding:6px 14px 10px}
+  .nav{width:34px;height:56px}
+}
+</style>
+</head>
+<body>
+<div id="app" data-ap="tactile">
+
+  <header id="rail">
+    <div class="brand">Tambre<small>stack · 04</small></div>
+
+    <div class="grp" id="f-approach"><label>approach</label></div>
+    <div class="grp" id="f-agent"><label>clean on</label></div>
+    <div class="grp" id="f-tag"><label>tag</label></div>
+    <div class="grp" id="f-trust"><label>trust</label></div>
+    <div class="grp" id="f-sort"><label>sort</label></div>
+
+    <span class="spacer"></span>
+    <button class="chip hotstate" id="autocue" aria-pressed="true" title="Play the newly focused pack's turn.end when the deck advances">auto-cue</button>
+    <span class="railnote">vol</span>
+    <input id="volume" type="range" min="0" max="100" value="72" aria-label="Master volume">
+    <button class="chip" id="indexBtn" aria-expanded="false">index</button>
+  </header>
+
+  <main id="stage">
+    <div id="peekhost"></div>
+    <article id="card" aria-live="polite"></article>
+    <div id="empty">
+      <h2>Nothing left in the deck.</h2>
+      <p>Every pack was filtered out. Loosen a filter to deal again.</p>
+    </div>
+    <button class="nav" id="prev" aria-label="Previous pack">&#8592;</button>
+    <button class="nav" id="next" aria-label="Next pack">&#8594;</button>
+  </main>
+
+  <footer id="foot">
+    <div id="pos"></div>
+    <div id="scrub" role="group" aria-label="Deck position scrubber"></div>
+  </footer>
+
+  <section id="sheet" hidden aria-label="Deck index">
+    <div id="sheethead">
+      <h3>The whole deck</h3>
+      <span id="sheetcount"></span>
+      <span>click a card to jump · esc to close</span>
+    </div>
+    <div id="sheetgrid"></div>
+  </section>
+
+  <div id="gate" role="dialog" aria-label="Turn on sound">
+    <div class="fan"><i></i><i></i><i></i><i></i></div>
+    <h2>Twenty-four packs,<br>face down.</h2>
+    <p>Nothing makes a sound until you cut the deck. Then one pack at a time: arrow keys, drag, or the buttons.</p>
+    <button id="cut">Cut the deck</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   PART 1 — sdsl/1 renderer.  DSP per spec §5.3:
+   sample rate 44100, mono, FNV-1a + mulberry32 PRNG,
+   RBJ cookbook band-pass normalised by a0, and the mandatory
+   master chain (x0.9 -> tanh(x*1.25)*0.8 -> trim -> 4 ms fade).
+   Nothing in Part 1..3 touches the DOM, so it renders in Node too.
+   ============================================================ */
+const SR = 44100;
+
+function fnv1a(s){let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+function bpCoeffs(f0,Q,sr){
+  f0=Math.max(20,Math.min(f0,sr*0.45));
+  const w0=2*Math.PI*f0/sr, al=Math.sin(w0)/(2*Math.max(0.05,Q)), c=Math.cos(w0);
+  const b0=al,b1=0,b2=-al,a0=1+al,a1=-2*c,a2=1-al;
+  return [b0/a0,b1/a0,b2/a0,a1/a0,a2/a0];
+}
+function biquad(x,co){
+  const b0=co[0],b1=co[1],b2=co[2],a1=co[3],a2=co[4];
+  let x1=0,x2=0,y1=0,y2=0;
+  const out=new Float32Array(x.length);
+  for(let i=0;i<x.length;i++){
+    const xi=x[i], y=b0*xi+b1*x1+b2*x2-a1*y1-a2*y2;
+    out[i]=y;x2=x1;x1=xi;y2=y1;y1=y;
+  }
+  return out;
+}
+
+/* ---- generator 1: tap — bandpassed noise burst + optional low thump ---- */
+function gTap(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.22)*SR));
+  const exc=new Float32Array(n);
+  for(let i=0;i<n;i++){const t=i/SR;exc[i]=(rng()*2-1)*Math.exp(-t/0.0016);}
+  const body=biquad(exc,bpCoeffs(p.f||400,p.q||3.2,SR));
+  const out=new Float32Array(n), dec=p.dec||0.04;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    let v=body[i]*Math.exp(-t/dec)*3.2;
+    if(p.thump) v+=Math.sin(2*Math.PI*(p.thumpf||70)*t)*p.thump*Math.exp(-t/(p.thumpdec||0.06));
+    if(p.bright) v+=(rng()*2-1)*p.bright*Math.exp(-t/0.005);
+    out[i]=v;
+  }
+  return out;
+}
+/* ---- generator 2: modal — sum of decaying sines ---- */
+function gModal(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.6)*SR));
+  const out=new Float32Array(n);
+  const parts=p.partials||[[1,1,1]], dec=p.dec||0.35, f0=p.f0||440;
+  for(let k=0;k<parts.length;k++){
+    const ratio=parts[k][0], amp=parts[k][1], dm=parts[k][2];
+    const f=f0*ratio, d=dec*(dm||1), ph=rng()*0.4;
+    for(let i=0;i<n;i++){
+      const t=i/SR;
+      out[i]+=Math.sin(2*Math.PI*f*t+ph)*amp*Math.exp(-t/d);
+    }
+  }
+  if(p.hit){
+    const hn=Math.round(0.004*SR);
+    for(let i=0;i<Math.min(n,hn);i++) out[i]+=(rng()*2-1)*p.hit*(1-i/hn);
+  }
+  let mx=0;for(let i=0;i<n;i++)mx=Math.max(mx,Math.abs(out[i]));
+  if(mx>0)for(let i=0;i<n;i++)out[i]/=mx;
+  return out;
+}
+/* ---- generator 3: pluck — Karplus-Strong ---- */
+function gPluck(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.5)*SR));
+  const f0=p.f0||220, L=Math.max(2,Math.round(SR/f0));
+  const buf=new Float32Array(L);
+  const bright=p.bright!==undefined?p.bright:0.5;
+  for(let i=0;i<L;i++)buf[i]=rng()*2-1;
+  for(let k=0;k<Math.round((1-bright)*6);k++){
+    let prev=buf[L-1];
+    for(let i=0;i<L;i++){const c=buf[i];buf[i]=(c+prev)*0.5;prev=c;}
+  }
+  const damp=p.damp!==undefined?p.damp:0.996;
+  const out=new Float32Array(n);
+  let idx=0,prev=0;
+  for(let i=0;i<n;i++){
+    const cur=buf[idx];
+    buf[idx]=(cur+prev)*0.5*damp;
+    out[i]=cur;prev=cur;
+    idx=(idx+1)%L;
+  }
+  for(let i=0;i<n;i++){const t=i/SR;out[i]*=Math.min(1,t/0.002);}
+  return out;
+}
+/* ---- generator 4: tone — additive sustain ---- */
+function gTone(p,rng){
+  const n=Math.max(1,Math.round((p.dur||1.0)*SR));
+  const out=new Float32Array(n);
+  const parts=p.partials||[[1,1]], f0=p.f0||220;
+  const atk=p.atk||0.05, rel=p.rel||0.3;
+  const vib=p.vib||0, vibr=p.vibrate||5, drift=p.drift||0;
+  const dph=rng()*Math.PI*2;
+  for(let k=0;k<parts.length;k++){
+    const ratio=parts[k][0], amp=parts[k][1];
+    let ph=rng()*Math.PI*2;
+    for(let i=0;i<n;i++){
+      const t=i/SR;
+      const dv=drift?Math.sin(2*Math.PI*0.13*t+dph)*drift:0;
+      const f=f0*ratio*(1+dv)*(1+(vib?Math.sin(2*Math.PI*vibr*t)*vib:0));
+      ph+=2*Math.PI*f/SR;
+      out[i]+=Math.sin(ph)*amp;
+    }
+  }
+  for(let i=0;i<n;i++){
+    const t=i/SR, tl=(n-i)/SR;
+    out[i]*=Math.min(1,t/atk)*Math.min(1,tl/rel);
+  }
+  let mx=0;for(let i=0;i<n;i++)mx=Math.max(mx,Math.abs(out[i]));
+  if(mx>0)for(let i=0;i<n;i++)out[i]/=mx;
+  return out;
+}
+/* ---- generator 5: blip — swept oscillator ---- */
+function gBlip(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.16)*SR));
+  const out=new Float32Array(n);
+  const f0=p.f0||440,f1=p.f1||880,wave=p.wave||"sine",dec=p.dec||(p.dur||0.16)*0.5;
+  let ph=rng()*0.01;
+  for(let i=0;i<n;i++){
+    const t=i/SR, u=i/n;
+    const f=f0*Math.pow(Math.max(1e-6,f1/f0),u);
+    ph+=2*Math.PI*f/SR;
+    const x=ph%(2*Math.PI);
+    let v;
+    if(wave==="square")v=x<Math.PI?1:-1;
+    else if(wave==="saw")v=x/Math.PI-1;
+    else if(wave==="tri")v=x<Math.PI?(x/Math.PI*2-1):(3-x/Math.PI*2);
+    else v=Math.sin(x);
+    out[i]=v*Math.exp(-t/dec);
+  }
+  return out;
+}
+/* ---- generator 6: noise — band-passed noise ---- */
+function gNoise(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.2)*SR));
+  const raw=new Float32Array(n);
+  for(let i=0;i<n;i++)raw[i]=rng()*2-1;
+  const lo=p.lo||300, hi=p.hi||3000;
+  const ctr=Math.sqrt(Math.max(20,lo)*Math.max(40,hi));
+  const Q=Math.max(0.35,ctr/Math.max(1,(hi-lo)));
+  const out=biquad(raw,bpCoeffs(ctr,Q,SR));
+  const atk=p.atk||0.002, dec=p.dec||(p.dur||0.2)*0.4, curve=p.curve||1;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    out[i]*=Math.min(1,t/atk)*Math.pow(Math.exp(-t/dec),curve)*2.4;
+  }
+  return out;
+}
+const GENS={tap:gTap,modal:gModal,pluck:gPluck,tone:gTone,blip:gBlip,noise:gNoise};
+
+function renderSdsl(doc,seedStr){
+  const rng=mulberry32(fnv1a(seedStr));
+  const evs=doc.events||[];
+  let tail=0;
+  for(let i=0;i<evs.length;i++){
+    const e=evs[i];
+    tail=Math.max(tail,(e.t||0)+((e.p&&e.p.dur)||0.5));
+  }
+  const n=Math.max(1,Math.round((tail+0.05)*SR));
+  const mix=new Float32Array(n);
+  for(let k=0;k<evs.length;k++){
+    const e=evs[k], gen=GENS[e.g];
+    if(!gen)continue;
+    const buf=gen(e.p||{},rng);
+    const off=Math.round((e.t||0)*SR);
+    const g=e.gain!==undefined?e.gain:1;
+    for(let i=0;i<buf.length;i++){
+      const j=off+i;if(j>=n)break;
+      mix[j]+=buf[i]*g;
+    }
+  }
+  /* master chain — mandatory, §5.3. Nothing may exceed -1 dBFS. */
+  for(let i=0;i<n;i++) mix[i]=Math.tanh(mix[i]*0.9*1.25)*0.8;
+  let last=n-1;
+  while(last>0&&Math.abs(mix[last])<1.26e-4)last--;
+  const out=mix.slice(0,Math.max(1,last+1));
+  const fade=Math.min(out.length,Math.round(0.004*SR));
+  for(let i=0;i<fade;i++) out[out.length-fade+i]*=1-i/fade;
+  return out;
+}
+function peaksFrom(buf,bins){
+  const out=new Array(bins).fill(0);
+  const step=buf.length/bins;
+  for(let b=0;b<bins;b++){
+    let mx=0;
+    const s=Math.floor(b*step), e=Math.min(buf.length,Math.floor((b+1)*step));
+    for(let i=s;i<e;i++){const a=Math.abs(buf[i]);if(a>mx)mx=a;}
+    out[b]=mx;
+  }
+  let m=1e-6;for(let i=0;i<bins;i++)m=Math.max(m,out[i]);
+  return out.map(function(v){return v/m;});
+}
+
+/* ============================================================
+   PART 2 — canonical events, support matrix, roles  (§6, §10.3)
+   ============================================================ */
+const EVENTS=["session.start","session.end","prompt.submit","turn.end","turn.fail",
+  "tool.pre","tool.post","tool.fail","permission.request","permission.denied",
+  "notification","subagent.start","subagent.end","compact.pre","compact.post","file.edit"];
+
+/* c = Claude Code, x = Codex CLI, u = Cursor */
+const SUPPORT={
+  "session.start":{c:1,x:1,u:1},   "session.end":{c:1,x:1,u:1},
+  "prompt.submit":{c:1,x:1,u:1},   "turn.end":{c:1,x:1,u:1},
+  "turn.fail":{c:1,x:0,u:0},       "tool.pre":{c:1,x:1,u:1},
+  "tool.post":{c:1,x:1,u:1},       "tool.fail":{c:1,x:1,u:1},
+  "permission.request":{c:1,x:1,u:0}, "permission.denied":{c:1,x:0,u:0},
+  "notification":{c:1,x:0,u:0},    "subagent.start":{c:1,x:1,u:1},
+  "subagent.end":{c:1,x:1,u:1},    "compact.pre":{c:1,x:1,u:1},
+  "compact.post":{c:1,x:1,u:0},    "file.edit":{c:0,x:0,u:1}
+};
+const FALLBACK={
+  "permission.request":["notification","turn.end"],
+  "permission.denied":["tool.fail"],
+  "notification":["turn.end"],
+  "turn.fail":["turn.end"],
+  "compact.post":["compact.pre"],
+  "file.edit":["tool.post"]
+};
+/* 2 = native. 1 = reachable only through the fallback chain (§6.3) — shown as a
+   distinct secondary state, never added to the headline number. 0 = unreachable.
+   Counting fallbacks would make every pack read 16/16 and say nothing. */
+function evState(ev,agent){
+  if(SUPPORT[ev]&&SUPPORT[ev][agent])return 2;
+  return (FALLBACK[ev]||[]).some(function(e){return SUPPORT[e]&&SUPPORT[e][agent];})?1:0;
+}
+function coverage(bound){
+  const r={};
+  ["c","x","u"].forEach(function(a){
+    const states=bound.map(function(ev){return evState(ev,a);});
+    r[a]={
+      direct:states.filter(function(s){return s===2;}).length,
+      via:states.filter(function(s){return s===1;}).length,
+      bound:bound.length
+    };
+  });
+  return r;
+}
+const ROLE={
+  "session.start":"boundary","session.end":"boundary","prompt.submit":"boundary",
+  "turn.end":"cue","turn.fail":"boundary","tool.pre":"churn","tool.post":"churn",
+  "tool.fail":"churn","permission.request":"cue","permission.denied":"churn",
+  "notification":"cue","subagent.start":"churn","subagent.end":"churn",
+  "compact.pre":"boundary","compact.post":"boundary","file.edit":"churn"
+};
+const ROLE_GAIN={boundary:1.0,cue:0.9,churn:0.2};
+const ROLE_THROTTLE={boundary:0,cue:0,churn:120};
+const AGENTS={c:"Claude Code",x:"Codex CLI",u:"Cursor"};
+
+/* ============================================================
+   PART 3 — sound authoring.
+   Each pack has a signature sdsl document; its 2–6 named sounds are
+   graded transpositions of it, one per role, so a churn tick is
+   audibly the little sibling of the boundary hit.
+   ============================================================ */
+const SEEDS={
+ woodKnock:{events:[{t:0,g:"tap",gain:.95,p:{f:620,q:5.2,dec:.028,thump:.22,thumpf:120,thumpdec:.03,bright:.16,dur:.18}}]},
+ denimBrush:{events:[{t:0,g:"tap",gain:.85,p:{f:340,q:2.6,dec:.05,thump:.4,thumpf:66,thumpdec:.07,bright:.06,dur:.26}}]},
+ paperTurn:{events:[{t:0,g:"noise",gain:.9,p:{lo:900,hi:5200,dur:.2,atk:.004,dec:.06,curve:1.4}}]},
+ breathRoom:{events:[{t:0,g:"noise",gain:.85,p:{lo:260,hi:1700,dur:.9,atk:.14,dec:.4,curve:.8}}]},
+ vesperBell:{events:[{t:0,g:"modal",gain:.9,p:{f0:528,partials:[[1,1,1],[2.76,.5,.62],[5.4,.26,.4],[8.9,.12,.28]],dec:.7,dur:1.0,hit:.3}}]},
+ bowlLow:{events:[{t:0,g:"modal",gain:.9,p:{f0:294,partials:[[1,1,1],[2.01,.42,.8],[3.03,.2,.55],[4.7,.1,.35]],dec:1.1,dur:1.4,hit:.16}}]},
+ coinDrop:{events:[
+   {t:0,g:"modal",gain:.85,p:{f0:1480,partials:[[1,1,1],[1.71,.6,.5],[2.43,.35,.34]],dec:.16,dur:.34,hit:.5}},
+   {t:.055,g:"modal",gain:.5,p:{f0:1620,partials:[[1,1,1],[1.71,.5,.45]],dec:.1,dur:.22,hit:.4}}]},
+ nylonPluck:{events:[{t:0,g:"pluck",gain:.9,p:{f0:196,dur:.85,damp:.9955,bright:.38}}]},
+ steelPluck:{events:[{t:0,g:"pluck",gain:.85,p:{f0:392,dur:.7,damp:.9975,bright:.82}}]},
+ longRoom:{events:[{t:0,g:"tone",gain:.75,p:{f0:110,partials:[[1,1],[2,.42],[3,.2],[4.02,.1],[6.01,.05]],dur:1.5,atk:.16,rel:.6,drift:.004}}]},
+ glassPorch:{events:[{t:0,g:"tone",gain:.7,p:{f0:246.9,partials:[[1,.9],[1.5,.42],[3,.2],[4.5,.08]],dur:1.3,atk:.1,rel:.5,vib:.0035,vibrate:4.5}}]},
+ upBlip:{events:[{t:0,g:"blip",gain:.8,p:{f0:420,f1:1180,dur:.14,wave:"sine",dec:.07}}]},
+ arcadeBlip:{events:[
+   {t:0,g:"blip",gain:.7,p:{f0:300,f1:900,dur:.12,wave:"square",dec:.05}},
+   {t:.1,g:"blip",gain:.55,p:{f0:900,f1:1500,dur:.1,wave:"square",dec:.045}}]},
+ waterDrop:{events:[
+   {t:0,g:"blip",gain:.8,p:{f0:1150,f1:300,dur:.16,wave:"sine",dec:.07}},
+   {t:0,g:"noise",gain:.25,p:{lo:1800,hi:6000,dur:.06,atk:.001,dec:.02,curve:1.6}}]},
+ morseTwo:{events:[
+   {t:0,g:"blip",gain:.7,p:{f0:760,f1:760,dur:.06,wave:"sine",dec:.04}},
+   {t:.11,g:"blip",gain:.7,p:{f0:760,f1:760,dur:.06,wave:"sine",dec:.04}},
+   {t:.22,g:"blip",gain:.6,p:{f0:1010,f1:1010,dur:.09,wave:"sine",dec:.06}}]},
+ tapBell:{events:[
+   {t:0,g:"tap",gain:.8,p:{f:520,q:4,dec:.03,thump:.3,thumpf:90,thumpdec:.04,bright:.12,dur:.2}},
+   {t:.045,g:"modal",gain:.6,p:{f0:880,partials:[[1,1,1],[2.4,.4,.5],[3.8,.18,.3]],dec:.3,dur:.6,hit:.1}}]},
+ anvilMail:{events:[
+   {t:0,g:"modal",gain:.85,p:{f0:660,partials:[[1,1,1],[2.9,.55,.5],[4.2,.3,.3],[7.1,.14,.2]],dec:.4,dur:.7,hit:.42}},
+   {t:0,g:"tap",gain:.5,p:{f:220,q:2,dec:.05,thump:.5,thumpf:70,thumpdec:.08,dur:.24}}]},
+ keyClack:{events:[
+   {t:0,g:"tap",gain:.9,p:{f:1150,q:6.5,dec:.014,thump:.18,thumpf:150,thumpdec:.02,bright:.3,dur:.12}},
+   {t:.02,g:"noise",gain:.35,p:{lo:2400,hi:8000,dur:.05,atk:.001,dec:.015,curve:1.8}}]},
+ dispatchTone:{events:[
+   {t:0,g:"blip",gain:.7,p:{f0:660,f1:990,dur:.11,wave:"tri",dec:.06}},
+   {t:.12,g:"noise",gain:.3,p:{lo:700,hi:3400,dur:.1,atk:.002,dec:.035,curve:1.2}}]},
+ lamplight:{events:[
+   {t:0,g:"pluck",gain:.75,p:{f0:294,dur:.8,damp:.997,bright:.55}},
+   {t:.02,g:"tone",gain:.3,p:{f0:147,partials:[[1,1],[2,.3],[3,.14]],dur:.9,atk:.08,rel:.4}}]},
+ subfloor:{events:[
+   {t:0,g:"tone",gain:.75,p:{f0:62,partials:[[1,1],[2,.35],[3.01,.14],[5,.06]],dur:1.8,atk:.2,rel:.8,drift:.006}},
+   {t:.05,g:"noise",gain:.2,p:{lo:80,hi:420,dur:1.4,atk:.25,dec:.7,curve:.7}}]},
+ tideDesk:{events:[
+   {t:0,g:"noise",gain:.8,p:{lo:200,hi:1400,dur:1.1,atk:.22,dec:.45,curve:.75}},
+   {t:.5,g:"blip",gain:.3,p:{f0:900,f1:420,dur:.14,wave:"sine",dec:.06}}]},
+ cardboard:{events:[
+   {t:0,g:"tap",gain:.9,p:{f:250,q:1.8,dec:.045,thump:.3,thumpf:80,thumpdec:.05,bright:.05,dur:.22}},
+   {t:0,g:"noise",gain:.3,p:{lo:400,hi:2600,dur:.09,atk:.001,dec:.03,curve:1.5}}]},
+ tinLid:{events:[{t:0,g:"modal",gain:.85,p:{f0:1180,partials:[[1,1,1],[1.44,.7,.6],[2.19,.45,.4],[3.6,.2,.25]],dec:.22,dur:.5,hit:.45}}]},
+ gutter:{events:[
+   {t:0,g:"blip",gain:.75,p:{f0:180,f1:520,dur:.2,wave:"saw",dec:.1}},
+   {t:.12,g:"tap",gain:.7,p:{f:300,q:2.4,dec:.06,thump:.45,thumpf:60,thumpdec:.09,dur:.3}}]},
+ feltHammer:{events:[
+   {t:0,g:"tap",gain:.9,p:{f:210,q:2.2,dec:.06,thump:.5,thumpf:58,thumpdec:.1,bright:.03,dur:.3}},
+   {t:.01,g:"noise",gain:.2,p:{lo:150,hi:900,dur:.12,atk:.003,dec:.05,curve:1.1}}]},
+ committee:{events:[
+   {t:0,g:"tap",gain:.7,p:{f:700,q:5,dec:.02,bright:.2,dur:.14}},
+   {t:.07,g:"modal",gain:.55,p:{f0:1040,partials:[[1,1,1],[2.2,.4,.5]],dec:.2,dur:.4,hit:.2}},
+   {t:.15,g:"tap",gain:.5,p:{f:480,q:3.4,dec:.03,thump:.2,thumpf:88,dur:.18}}]}
+};
+
+function scaleP(p,f,d){
+  const q={};
+  for(const k in p) q[k]=p[k];
+  ["f","f0","f1","lo","hi","thumpf"].forEach(function(k){if(q[k]!==undefined)q[k]*=f;});
+  ["dur","dec","atk","rel","thumpdec"].forEach(function(k){if(q[k]!==undefined)q[k]*=d;});
+  if(q.partials) q.partials=q.partials.map(function(a){return a.slice();});
+  return q;
+}
+function derive(doc,f,d){
+  return {kind:"sdsl",events:doc.events.map(function(e){
+    return {t:(e.t||0)*d,g:e.g,gain:e.gain,p:scaleP(e.p||{},f,d)};
+  })};
+}
+/* per-approach naming vocabulary: [cue word, churn word, failure word] */
+const WORDS={
+  tactile:["knock","brush","dull"],
+  jingle:["ring","ping","clank"],
+  bed:["bloom","hush","sink"],
+  hybrid:["mark","flick","snag"]
+};
+/* graded voices: smaller+higher for churn, larger+lower for failure */
+const GRADES=[
+  {role:"cue",  f:1.00, d:1.00},
+  {role:"churn",f:1.44, d:0.52},
+  {role:"fail", f:0.62, d:1.34},
+  {role:"cue",  f:0.84, d:1.14},
+  {role:"churn",f:1.82, d:0.40},
+  {role:"fail", f:0.48, d:1.62}
+];
+function buildSounds(pk){
+  const base=derive(SEEDS[pk.sd],pk.tp||1,pk.td||1);
+  const n=Math.max(2,Math.min(pk.nv,6));
+  const w=WORDS[pk.ap], word={cue:w[0],churn:w[1],fail:w[2]};
+  const seen={cue:0,churn:0,fail:0};
+  const sounds={}, byRole={cue:[],churn:[],fail:[]};
+  for(let i=0;i<n;i++){
+    const g=GRADES[i];
+    seen[g.role]++;
+    const name=word[g.role]+(seen[g.role]>1?"-"+seen[g.role]:"");
+    sounds[name]=(g.f===1&&g.d===1)?base:derive(base,g.f,g.d);
+    byRole[g.role].push(name);
+  }
+  return {sounds:sounds,byRole:byRole};
+}
+function buildBindings(pk,byRole){
+  const b={}, cur={cue:0,churn:0,fail:0};
+  pk.b.forEach(function(ev){
+    const role=ROLE[ev];
+    const grp=/fail|denied/.test(ev)?"fail":(role==="churn"?"churn":"cue");
+    const pool=byRole[grp].length?byRole[grp]:(byRole.cue.length?byRole.cue:byRole.churn);
+    const sound=pool[cur[grp]++%pool.length];
+    b[ev]={sound:sound,gain:ROLE_GAIN[role],throttle:ROLE_THROTTLE[role],role:role};
+  });
+  return b;
+}
+
+/* ============================================================
+   PART 4 — the 24 packs. Invented, with awkward cases on purpose.
+   ============================================================ */
+const CORE=["session.start","prompt.submit","turn.end","tool.pre","tool.post","tool.fail",
+  "permission.request","notification","subagent.end","compact.pre","session.end"];
+const WIDE=CORE.concat(["turn.fail","subagent.start","compact.post"]);
+const LEAN=["session.start","prompt.submit","turn.end","tool.pre","tool.post","compact.pre","session.end"];
+const MIN=["turn.end","permission.request","tool.fail","notification","session.start"];
+const QUIET=["turn.end","tool.fail","permission.request","session.end"];
+/* Cursor-leaning: file.edit is Cursor-only, so this pack inverts the usual order. */
+const EDITWISE=["session.start","prompt.submit","turn.end","tool.pre","tool.post","tool.fail",
+  "file.edit","subagent.start","subagent.end","compact.pre","session.end"];
+/* Claude-leaning: four of these five cues only Claude Code fires. */
+const CLAUDEISH=["session.start","turn.end","turn.fail","permission.request","permission.denied",
+  "notification","compact.post","tool.fail"];
+const ALL16=EVENTS.slice();
+
+const PACKS=[
+ {s:"loam",n:"thumbwood",t:"Thumbwood",ap:"tactile",tr:"curated",ver:"2.1.0",
+  tags:["dry","wooden","quiet","non-pitched"],ins:24180,pl:911402,pub:"2026-06-19",
+  sd:"woodKnock",tp:1,td:1,nv:4,b:CORE,
+  desc:"A thumbnail against the underside of a desk. Nothing rings; the whole pack is edge and stop, and the meaning is carried by how many."},
+
+ {s:"tess",n:"corduroy-index",t:"Corduroy Index",ap:"tactile",tr:"attested",ver:"1.3.2",
+  tags:["cloth","dry","soft"],ins:6310,pl:188740,pub:"2026-05-02",
+  sd:"denimBrush",tp:1,td:1,nv:3,b:LEAN,
+  desc:"One fingertip dragged across wide-wale corduroy. Deliberately unpitched so it never fights whatever you are listening to."},
+
+ {s:"halyard",n:"paper-route",t:"Paper Route",ap:"tactile",tr:"attested",ver:"3.0.1",
+  tags:["paper","noise","crisp","office"],ins:15870,pl:402118,pub:"2026-07-28",
+  sd:"paperTurn",tp:1,td:1,nv:5,b:WIDE,
+  desc:"Fourteen bindings of paper: a page turned for a tool call, a sheet snapped straight for the turn, a whole ream dropped when something fails."},
+
+ {s:"nook",n:"knuckle-desk",t:"Knuckle Desk",ap:"tactile",tr:"unverified",ver:"0.4.0",
+  tags:["wood","loud","blunt"],ins:412,pl:9330,pub:"2026-08-03",
+  sd:"woodKnock",tp:0.72,td:1.25,nv:2,b:MIN,
+  desc:"Two sounds. A knock and a smaller knock. Published four days ago by a key with no attestation, which is why you had to ask to see it."},
+
+ {s:"orbit-lab",n:"felt-hammer",t:"Felt Hammer",ap:"tactile",tr:"curated",ver:"4.2.0",
+  tags:["soft","warm","low","complete"],ins:41290,pl:1804553,pub:"2026-04-11",
+  sd:"feltHammer",tp:1,td:1,nv:6,b:ALL16,
+  desc:"Binds all sixteen canonical events — the only pack here that does. Piano-hammer felt on a bare string bed: audible, never sharp."},
+
+ {s:"drift",n:"cardboard",t:"Cardboard Method",ap:"tactile",tr:"attested",ver:"1.0.4",
+  tags:["dry","box","dull"],ins:3980,pl:71204,pub:"2026-03-22",
+  sd:"cardboard",tp:1,td:1,nv:3,b:QUIET,
+  desc:"Four bindings, no churn at all. For people who want to know when the agent stops and when it needs them, and nothing else."},
+
+ {s:"bellhouse",n:"vesper",t:"Vesper",ap:"jingle",tr:"curated",ver:"2.4.1",
+  tags:["bell","bright","pitched","tuned"],ins:52140,pl:2418890,pub:"2026-06-30",
+  sd:"vesperBell",tp:1,td:1,nv:5,b:CORE,
+  desc:"A small tuned bell struck with a coin. Partials are inharmonic on purpose so two of them landing together still sounds like one object."},
+
+ {s:"kiosk",n:"arcade-civics",t:"Arcade Civics",ap:"jingle",tr:"attested",ver:"1.9.0",
+  tags:["chiptune","square","playful","loud"],ins:29450,pl:1330771,pub:"2026-07-09",
+  sd:"arcadeBlip",tp:1,td:1,nv:4,b:WIDE,
+  desc:"Two square-wave blips per gesture, rising for a win and falling for a fault. Charming for a day, and then you will want the churn gain lower."},
+
+ {s:"marisol",n:"coin-return",t:"Coin Return",ap:"jingle",tr:"attested",ver:"1.1.0",
+  tags:["metal","short","bright"],ins:9120,pl:255880,pub:"2026-05-24",
+  sd:"coinDrop",tp:1,td:1,nv:3,b:CORE,
+  desc:"A dime hitting the tray, twice, slightly out of time. Very short, so it survives being bound to tool.post without becoming a texture."},
+
+ {s:"plume",n:"nylon-six",t:"Nylon Six",ap:"jingle",tr:"unverified",ver:"0.9.1",
+  tags:["string","plucked","warm","pitched"],ins:806,pl:22140,pub:"2026-07-31",
+  sd:"nylonPluck",tp:1,td:1,nv:6,b:ALL16,
+  desc:"Six graded plucks off a classical low G, one per role. Ambitious for an unverified scope — bind it and you will hear the agent play a scale."},
+
+ {s:"signal-hill",n:"morse-manners",t:"Morse Manners",ap:"jingle",tr:"curated",ver:"3.1.0",
+  tags:["morse","sine","minimal","quiet"],ins:18730,pl:640215,pub:"2026-02-17",
+  sd:"morseTwo",tp:1,td:1,nv:4,b:LEAN,
+  desc:"Two dots and a dash, pure sine, no envelope theatrics. The most legible pack in the registry over a noisy room or a cheap laptop speaker."},
+
+ {s:"kettle",n:"tin-lid",t:"Tin Lid",ap:"jingle",tr:"attested",ver:"1.0.0",
+  tags:["metal","rattle","cheap"],ins:2240,pl:41208,pub:"2026-04-28",
+  sd:"tinLid",tp:1,td:1,nv:2,b:QUIET,
+  desc:"The lid of a biscuit tin, flicked. Two sounds and four bindings: this is the smallest honest pack shape the spec allows."},
+
+ {s:"stillwater",n:"long-room",t:"Long Room",ap:"bed",tr:"curated",ver:"2.0.2",
+  tags:["drone","warm","continuous","low"],ins:33610,pl:1502430,pub:"2026-06-05",
+  sd:"longRoom",tp:1,td:1,nv:4,b:CORE,
+  desc:"A low A that swells and settles. Bed packs flatten dynamics on purpose, so the churn ticks sit only a few dB under the boundaries."},
+
+ {s:"veldt",n:"harmonic-porch",t:"Harmonic Porch",ap:"bed",tr:"attested",ver:"1.6.0",
+  tags:["glass","airy","pitched","slow"],ins:11480,pl:388900,pub:"2026-07-21",
+  sd:"glassPorch",tp:1,td:1,nv:5,b:WIDE,
+  desc:"Rubbed glass with a slow vibrato. Fourteen bindings, and the two failure voices are the only things in the pack with a hard edge."},
+
+ {s:"moss",n:"breath-index",t:"Breath Index",ap:"bed",tr:"attested",ver:"1.2.1",
+  tags:["breath","noise","quiet","calm"],ins:7690,pl:210365,pub:"2026-03-09",
+  sd:"breathRoom",tp:1,td:1,nv:3,b:LEAN,
+  desc:"Band-passed room noise with a long attack — closer to a ventilation system agreeing with you than to a notification."},
+
+ {s:"null-hotel",n:"subfloor",t:"Subfloor",ap:"bed",tr:"unverified",ver:"0.2.0",
+  tags:["low","rumble","long","heavy"],ins:298,pl:6104,pub:"2026-08-06",
+  sd:"subfloor",tp:1,td:1,nv:4,b:CORE,
+  desc:"62 Hz and a hiss of grit. Published yesterday, unattested, and loud enough on the low end that you should audition it before you install it."},
+
+ {s:"aurelia",n:"wet-glass",t:"Wet Glass Continuo",ap:"bed",tr:"curated",ver:"5.0.0",
+  tags:["glass","wet","slow","complete"],ins:37110,pl:1690244,pub:"2026-05-15",
+  sd:"glassPorch",tp:0.78,td:1.2,nv:6,b:ALL16,
+  desc:"A wineglass held under a tap. All sixteen events bound across six voices, and it still never rises above a room's worth of ambience."},
+
+ {s:"fen",n:"tide-desk",t:"Tide Desk",ap:"bed",tr:"attested",ver:"1.4.0",
+  tags:["water","soft","slow"],ins:5420,pl:132980,pub:"2026-02-26",
+  sd:"tideDesk",tp:1,td:1,nv:3,b:QUIET,
+  desc:"A wash with a single drop landing late in it. Four bindings only, because a bed pack bound to tool.pre becomes weather."},
+
+ {s:"brightwork",n:"committee-of-small-percussive-decisions",
+  t:"The Standing Committee on Small Percussive Decisions",ap:"hybrid",tr:"attested",ver:"1.0.2",
+  tags:["percussive","mixed","busy","tuned"],ins:8940,pl:301877,pub:"2026-07-02",
+  sd:"committee",tp:1,td:1,nv:5,b:WIDE,
+  desc:"Three strikes per gesture: wood, tine, wood. The title is a joke about naming conventions and it is also the longest name in the registry."},
+
+ {s:"sable",n:"anvil-mail",t:"Anvil Mail",ap:"hybrid",tr:"curated",ver:"2.2.0",
+  tags:["metal","tap","alert","claude"],ins:21030,pl:702330,pub:"2026-06-11",
+  sd:"anvilMail",tp:1,td:1,nv:4,b:CLAUDEISH,
+  desc:"Deliberately Claude-shaped: it binds turn.fail, permission.denied and notification, which only Claude Code fires. On Cursor most of it falls back."},
+
+ {s:"quarry",n:"keystroke",t:"Keystroke Quarry",ap:"hybrid",tr:"attested",ver:"1.5.0",
+  tags:["typing","edit","cursor","dry"],ins:16240,pl:559041,pub:"2026-07-25",
+  sd:"keyClack",tp:1,td:1,nv:4,b:EDITWISE,
+  desc:"Built around file.edit, which only Cursor fires — so this is the rare pack that scores higher on Cursor than on Claude Code. You hear the agent type."},
+
+ {s:"hollowpoint",n:"gutter-ball",t:"Gutter Ball",ap:"hybrid",tr:"unverified",ver:"0.1.3",
+  tags:["odd","loud","low","raw"],ins:184,pl:3096,pub:"2026-08-01",
+  sd:"gutter",tp:1,td:1,nv:3,b:MIN,
+  desc:"A sawtooth slide into a thud. Unverified, five bindings, and no attempt at restraint. Included because the registry should not hide its long tail."},
+
+ {s:"vireo",n:"lamplight",t:"Lamplight Protocol",ap:"hybrid",tr:"curated",ver:"3.3.1",
+  tags:["warm","pitched","calm","complete"],ins:44870,pl:1988112,pub:"2026-04-03",
+  sd:"lamplight",tp:1,td:1,nv:6,b:CORE,
+  desc:"A plucked D over a low drone that fades as the string does. Six voices across eleven bindings — the most-installed hybrid pack in the set."},
+
+ {s:"atlas-works",n:"dispatch",t:"Dispatch",ap:"hybrid",tr:"attested",ver:"2.0.0",
+  tags:["signal","clear","office","tuned"],ins:13560,pl:471903,pub:"2026-05-30",
+  sd:"dispatchTone",tp:1,td:1,nv:5,b:WIDE,
+  desc:"A triangle-wave two-tone with a breath of noise behind it. Reads as institutional rather than cute, which is the point."}
+];
+
+/* hydrate */
+PACKS.forEach(function(p){
+  p.id="@"+p.s+"/"+p.n;
+  const built=buildSounds(p);
+  p.sounds=built.sounds;
+  p.byRole=built.byRole;
+  p.soundNames=Object.keys(p.sounds);
+  p.sc=p.soundNames.length;
+  p.bindings=buildBindings(p,built.byRole);
+  p.boundEvents=EVENTS.filter(function(e){return !!p.bindings[e];});
+  p.cov=coverage(p.boundEvents);
+  p._buf={};p._peaks={};
+  /* primary cue: what the deck auto-plays and what the hero waveform shows */
+  p.primary=p.bindings["turn.end"]?"turn.end":p.boundEvents[0];
+});
+
+const PAL={
+  tactile:{bg:"#C0331A",ink:"#FFF0E2",dim:"#FFBE9A",hot:"#FFD166"},
+  jingle: {bg:"#F0C000",ink:"#1B1305",dim:"#5E4707",hot:"#2417C9"},
+  bed:    {bg:"#0B5E63",ink:"#DAFBF2",dim:"#7ACFC1",hot:"#79F0C6"},
+  hybrid: {bg:"#5C1AA8",ink:"#F7E8FF",dim:"#C9A2F0",hot:"#FF4FD8"}
+};
+
+/* ============================================================
+   PART 5 — DOM BOOT. Everything above is environment-free.
+   ============================================================ */
+const REDUCED = (typeof window!=="undefined" && window.matchMedia)
+  ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
+
+/* ---------------- audio engine ---------------- */
+let ctx=null, master=null, powered=false;
+let voices=[];
+const lastRole=new Map();
+let lastHover=0;
+const HOVER_THROTTLE=100;   /* hover preview gate, separate from role throttle */
+let playhead=null;          /* {t0,ms} while a sound is sounding */
+
+function powerOn(){
+  if(powered)return;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    ctx=new AC({sampleRate:SR});
+    master=ctx.createGain();
+    master.connect(ctx.destination);
+  }catch(err){ ctx=null; master=null; }
+  powered=true;
+  applyVolume();
+  const gate=document.getElementById("gate");
+  if(gate) gate.style.display="none";
+  deal(0,"R");
+}
+function applyVolume(){
+  if(!master)return;
+  const el=document.getElementById("volume");
+  master.gain.value=(el?Number(el.value):72)/100;
+}
+function bufferFor(pack,name){
+  if(!pack._buf[name]) pack._buf[name]=renderSdsl(pack.sounds[name],pack.id+"@"+pack.ver+"/"+name);
+  return pack._buf[name];
+}
+function peaksFor(pack,name,bins){
+  const k=name+"@"+bins;
+  if(!pack._peaks[k]) pack._peaks[k]=peaksFrom(bufferFor(pack,name),bins);
+  return pack._peaks[k];
+}
+
+/* preview=true -> the hover gate applies instead of the binding's role throttle.
+   turn.end is role cue (throttle 0), which is right for a live agent and
+   miserable when you are sweeping a mouse across fourteen hook targets. */
+function play(pack,event,preview){
+  if(!powered)return false;
+  const b=pack.bindings[event];
+  if(!b)return false;
+  const now=(typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();
+  if(preview){
+    if(now-lastHover<HOVER_THROTTLE) return false;
+    lastHover=now;
+  }else{
+    const key=pack.id+"|"+event;
+    const prev=lastRole.get(key);
+    if(b.throttle && prev!==undefined && now-prev<b.throttle) return false;
+    lastRole.set(key,now);
+  }
+  const data=bufferFor(pack,b.sound);
+  const ms=data.length/SR*1000;
+
+  if(ctx && master){
+    voices=voices.filter(function(v){return v.until>now;});
+    while(voices.length>=6){                    /* polyphony cap 6, drop oldest */
+      const old=voices.shift();
+      try{old.src.stop();}catch(e){}
+    }
+    try{
+      const ab=ctx.createBuffer(1,data.length,SR);
+      if(ab.copyToChannel) ab.copyToChannel(data,0);
+      const src=ctx.createBufferSource();
+      src.buffer=ab;
+      const g=ctx.createGain();
+      g.gain.value=b.gain;
+      src.connect(g);g.connect(master);
+      src.start();
+      voices.push({src:src,until:now+ms});
+    }catch(e){}
+  }
+  ringHook(event,ms);
+  flashCard(ms);
+  playhead={t0:now,ms:ms};
+  animate();
+  return true;
+}
+function stopAll(){
+  voices.forEach(function(v){try{v.src.stop();}catch(e){}});
+  voices=[];
+}
+
+/* ---------------- deck state ---------------- */
+const state={
+  ap:new Set(), agent:new Set(), tag:new Set(),
+  trust:new Set(["curated","attested"]),     /* unverified excluded by default, §8.3 */
+  sort:"newest"
+};
+let deck=[], idx=0, focusEv=null, dir="R";
+
+const SORTS={
+  newest:function(a,b){return a.pub<b.pub?1:a.pub>b.pub?-1:0;},
+  installs:function(a,b){return b.ins-a.ins;},
+  plays:function(a,b){return b.pl-a.pl;}
+};
+/* "clean on X" = at least three quarters of the pack's bindings fire natively there */
+function cleanOn(p,a){return p.cov[a].direct/Math.max(1,p.cov[a].bound)>=0.75;}
+
+function rebuild(keepId){
+  deck=PACKS.filter(function(p){
+    if(state.ap.size && !state.ap.has(p.ap)) return false;
+    if(state.trust.size && !state.trust.has(p.tr)) return false;
+    if(state.tag.size){
+      let hit=false;
+      state.tag.forEach(function(t){if(p.tags.indexOf(t)>=0)hit=true;});
+      if(!hit) return false;
+    }
+    if(state.agent.size){
+      let ok=true;
+      state.agent.forEach(function(a){if(!cleanOn(p,a))ok=false;});
+      if(!ok) return false;
+    }
+    return true;
+  }).sort(SORTS[state.sort]);
+
+  let want=0;
+  if(keepId){
+    const at=deck.findIndex(function(p){return p.id===keepId;});
+    if(at>=0) want=at;
+  }
+  idx=deck.length?Math.min(want,deck.length-1):0;
+  const app=document.getElementById("app");
+  app.classList.toggle("noresults",deck.length===0);
+  paintScrub();
+  paintSheet();
+  if(deck.length) render(false);
+  else{ document.getElementById("pos").innerHTML="00&thinsp;<small>/ 00</small>"; }
+}
+
+function deal(n,d){
+  if(!deck.length)return;
+  dir=d||"R";
+  idx=((n%deck.length)+deck.length)%deck.length;
+  focusEv=null;
+  render(true);
+  if(powered && autocueOn()) play(deck[idx],deck[idx].primary,false);
+}
+function nav(step){ deal(idx+step, step>0?"R":"L"); }
+function autocueOn(){
+  const el=document.getElementById("autocue");
+  return !el || el.getAttribute("aria-pressed")==="true";
+}
+
+/* ---------------- rendering ---------------- */
+function fmt(n){
+  if(n>=1e6) return (n/1e6).toFixed(n>=1e7?0:1)+"M";
+  if(n>=1e3) return (n/1e3).toFixed(n>=1e4?0:1)+"k";
+  return String(n);
+}
+function pad2(n){return (n<10?"0":"")+n;}
+function titleSize(len){
+  if(len<=11) return "clamp(64px,11.2vw,164px)";
+  if(len<=18) return "clamp(60px,8.6vw,128px)";
+  if(len<=30) return "clamp(48px,6.2vw,100px)";
+  if(len<=44) return "clamp(42px,4.8vw,78px)";
+  return "clamp(38px,4.15vw,64px)";       /* the 51-character title lands here */
+}
+function dateLabel(iso){
+  const p=iso.split("-");
+  const M=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return p[2].replace(/^0/,"")+" "+M[Number(p[1])-1]+" "+p[0];
+}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+
+function render(animateIn){
+  const p=deck[idx];
+  if(!p)return;
+  const app=document.getElementById("app");
+  app.setAttribute("data-ap",p.ap);
+  if(!focusEv || !p.bindings[focusEv]) focusEv=p.primary;
+
+  const card=document.getElementById("card");
+  const covCells=["c","x","u"].map(function(a){
+    const c=p.cov[a];
+    return '<div class="covcell" title="'+esc(AGENTS[a])+': '+c.direct+' of '+c.bound+
+      ' bindings fire natively'+(c.via?', '+c.via+' more reachable only through the fallback chain':'')+'">'+
+      esc(AGENTS[a])+'<b>'+c.direct+"/"+c.bound+'</b><em>'+(c.via?"+"+c.via+" via fallback":"no fallbacks needed")+'</em></div>';
+  }).join("");
+
+  card.innerHTML=
+    '<div class="eyebrow">'+
+      '<span class="scope">'+esc(p.id)+'</span>'+
+      '<span>v'+esc(p.ver)+'</span>'+
+      '<span class="badge '+p.tr+'">'+p.tr+'</span>'+
+      '<span>'+dateLabel(p.pub)+'</span>'+
+      '<span class="approachword">'+p.ap+'</span>'+
+    '</div>'+
+    '<h1 id="title" style="font-size:'+titleSize(p.t.length)+'">'+esc(p.t)+'</h1>'+
+    '<p id="desc">'+esc(p.desc)+'</p>'+
+    '<div id="hero-wrap">'+
+      '<div id="hero-cap"></div>'+
+      '<canvas id="hero" aria-label="Waveform of the focused sound"></canvas>'+
+    '</div>'+
+    '<div id="organ-head"><strong>Audition the bound hooks</strong>'+
+      '<span>sweep across &middot; each hook has its own sound &middot; '+p.boundEvents.length+' bindings, '+p.sc+' sounds</span></div>'+
+    '<div id="organ" role="group" aria-label="Bound hooks"></div>'+
+    '<div id="cardfoot">'+
+      '<div>'+
+        '<div class="stats">'+
+          '<div class="stat">sounds<b>'+p.sc+'</b></div>'+
+          '<div class="stat">bindings<b>'+p.boundEvents.length+'</b></div>'+
+          '<div class="stat">installs<b>'+fmt(p.ins)+'</b></div>'+
+          '<div class="stat">plays<b>'+fmt(p.pl)+'</b></div>'+
+        '</div>'+
+        '<div class="tags">'+p.tags.map(function(t){return '<span class="tag">'+esc(t)+'</span>';}).join("")+'</div>'+
+      '</div>'+
+      '<div class="cov">'+covCells+'</div>'+
+      '<div id="install"><code id="cmd">npx tambre install '+esc(p.id)+' --agent all</code>'+
+        '<button id="copybtn">copy</button></div>'+
+    '</div>';
+
+  if(animateIn && !REDUCED){
+    card.classList.remove("dealR","dealL");
+    void card.offsetWidth;
+    card.classList.add(dir==="R"?"dealR":"dealL");
+  }
+
+  paintOrgan(p);
+  paintHero();
+  paintPeeks();
+  paintPos();
+  paintScrub();
+
+  const cp=document.getElementById("copybtn");
+  if(cp) cp.addEventListener("click",function(ev){
+    ev.stopPropagation();
+    const cmd=document.getElementById("cmd").textContent;
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(cmd); }catch(e){}
+    cp.textContent="copied";
+    setTimeout(function(){cp.textContent="copy";},1200);
+  });
+}
+
+function paintOrgan(p){
+  const host=document.getElementById("organ");
+  if(!host)return;
+  host.innerHTML=p.boundEvents.map(function(ev){
+    const b=p.bindings[ev];
+    const dots=["c","x","u"].map(function(a){
+      const s=evState(ev,a);
+      return '<i class="'+(s===2?"native":s===1?"via":"")+'" title="'+esc(AGENTS[a])+": "+
+        (s===2?"native":s===1?"fallback only":"unreachable")+'"></i>';
+    }).join("");
+    return '<button class="hook'+(ev===focusEv?" focused":"")+'" data-ev="'+esc(ev)+'" '+
+      'title="'+esc(ev)+' → '+esc(b.sound)+' · role '+b.role+' · gain '+b.gain.toFixed(2)+
+      (b.throttle?' · throttle '+b.throttle+'ms':'')+'">'+
+      '<span class="hev">'+esc(ev)+'</span>'+
+      '<span class="hsnd">'+esc(b.sound)+'</span>'+
+      '<span class="hmeta">'+b.role+' &middot; g'+b.gain.toFixed(2)+
+        (b.throttle?" &middot; "+b.throttle+"ms":"")+'<span class="dots">'+dots+'</span></span>'+
+      '<canvas class="spark" width="120" height="20"></canvas>'+
+    '</button>';
+  }).join("");
+
+  Array.prototype.forEach.call(host.querySelectorAll(".hook"),function(el){
+    const ev=el.getAttribute("data-ev");
+    paintSpark(el.querySelector(".spark"),p,p.bindings[ev].sound);
+    el.addEventListener("mouseenter",function(){ audition(ev,true); });
+    el.addEventListener("focus",function(){ audition(ev,true); });
+    el.addEventListener("click",function(e){ e.stopPropagation(); audition(ev,false); });
+  });
+}
+
+/* hovering a hook focuses it (hero waveform morphs) and plays its own sound */
+function audition(ev,isHover){
+  const p=deck[idx];
+  if(!p||!p.bindings[ev])return;
+  focusEv=ev;
+  const host=document.getElementById("organ");
+  if(host) Array.prototype.forEach.call(host.querySelectorAll(".hook"),function(el){
+    el.classList.toggle("focused",el.getAttribute("data-ev")===ev);
+  });
+  paintHero();
+  play(p,ev,!!isHover);
+}
+function ringHook(ev,ms){
+  const host=document.getElementById("organ");
+  if(!host)return;
+  const el=host.querySelector('.hook[data-ev="'+ev.replace(/"/g,"")+'"]');
+  if(!el)return;
+  el.classList.add("ringing");
+  clearTimeout(el._t);
+  el._t=setTimeout(function(){el.classList.remove("ringing");},Math.max(180,Math.min(900,ms)));
+}
+function flashCard(ms){
+  const card=document.getElementById("card");
+  if(!card)return;
+  card.classList.add("sounding");
+  clearTimeout(card._t);
+  card._t=setTimeout(function(){card.classList.remove("sounding");},Math.max(200,Math.min(1000,ms)));
+}
+
+function paintSpark(cv,p,soundName){
+  if(!cv)return;
+  const g=cv.getContext?cv.getContext("2d"):null;
+  if(!g)return;
+  const w=cv.width||120,h=cv.height||20;
+  const pk=peaksFor(p,soundName,40);
+  g.clearRect(0,0,w,h);
+  g.fillStyle=PAL[p.ap].ink;
+  const bw=w/pk.length;
+  for(let i=0;i<pk.length;i++){
+    const hh=Math.max(1,pk[i]*h*0.46);
+    g.fillRect(i*bw,h/2-hh,Math.max(1,bw-1),hh*2);
+  }
+}
+
+function paintHero(){
+  const p=deck[idx];
+  const cv=document.getElementById("hero");
+  const cap=document.getElementById("hero-cap");
+  if(!p||!cv)return;
+  const ev=focusEv||p.primary, b=p.bindings[ev];
+  if(!b)return;
+  const buf=bufferFor(p,b.sound);
+  const ms=Math.round(buf.length/SR*1000);
+  if(cap) cap.innerHTML=
+    'sound <b>'+esc(b.sound)+'</b> &nbsp;bound to <span class="ev">'+esc(ev)+'</span>'+
+    ' &nbsp;role '+b.role+' &nbsp;gain '+b.gain.toFixed(2)+
+    (b.throttle?" &nbsp;throttle "+b.throttle+"ms":" &nbsp;no throttle")+
+    ' &nbsp;'+ms+' ms';
+
+  const dpr=(typeof window!=="undefined"&&window.devicePixelRatio)?window.devicePixelRatio:1;
+  const cssW=cv.clientWidth||960, cssH=cv.clientHeight||132;
+  cv.width=Math.max(160,Math.round(cssW*dpr));
+  cv.height=Math.max(60,Math.round(cssH*dpr));
+  const g=cv.getContext?cv.getContext("2d"):null;
+  if(!g)return;
+  if(g.setTransform) g.setTransform(dpr,0,0,dpr,0,0);
+  const w=cssW,h=cssH;
+  const bins=Math.max(48,Math.min(220,Math.floor(w/6)));
+  const pk=peaksFor(p,b.sound,bins);
+  const pal=PAL[p.ap];
+  g.clearRect(0,0,w,h);
+
+  /* progress of the currently sounding voice, for the sweep */
+  let prog=1;
+  if(playhead){
+    const now=(typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();
+    prog=Math.min(1,(now-playhead.t0)/Math.max(1,playhead.ms));
+  }
+  const bw=w/pk.length;
+  for(let i=0;i<pk.length;i++){
+    const u=i/pk.length;
+    const hh=Math.max(1.2,pk[i]*h*0.44);
+    const lit=playhead && u<=prog;
+    g.fillStyle=lit?pal.hot:pal.ink;
+    g.globalAlpha=lit?1:0.86;
+    g.fillRect(i*bw,h/2-hh,Math.max(1,bw-1.6),hh*2);
+  }
+  g.globalAlpha=1;
+  /* centre line */
+  g.fillStyle=pal.dim;
+  g.globalAlpha=0.45;
+  g.fillRect(0,h/2-0.5,w,1);
+  g.globalAlpha=1;
+  if(playhead && prog<1){
+    g.fillStyle=pal.hot;
+    g.fillRect(Math.min(w-2,prog*w),0,2,h);
+  }
+}
+
+let rafId=null;
+function animate(){
+  if(REDUCED || typeof requestAnimationFrame!=="function"){ playhead=null; paintHero(); return; }
+  if(rafId!==null)return;
+  const step=function(){
+    rafId=null;
+    if(!playhead){ paintHero(); return; }
+    const now=(typeof performance!=="undefined"&&performance.now)?performance.now():Date.now();
+    if(now-playhead.t0>=playhead.ms){ playhead=null; paintHero(); return; }
+    paintHero();
+    rafId=requestAnimationFrame(step);
+  };
+  rafId=requestAnimationFrame(step);
+}
+
+function paintPeeks(){
+  const host=document.getElementById("peekhost");
+  if(!host)return;
+  const layers=[
+    {off:2,dx:26,dy:-16,rot:1.6,sc:0.965,op:0.9},
+    {off:1,dx:13,dy:-8, rot:0.8,sc:0.983,op:0.95}
+  ];
+  host.innerHTML=layers.map(function(L){
+    if(deck.length<2) return "";
+    const q=deck[(idx+L.off)%deck.length];
+    const pal=PAL[q.ap];
+    return '<div class="peek" style="background:'+pal.bg+';color:'+pal.ink+';opacity:'+L.op+
+      ';transform:translateX(calc(-50% + '+L.dx+'px)) translateY('+L.dy+'px) scale('+L.sc+') rotate('+L.rot+'deg)">'+
+      '<span class="ps">'+esc(q.id)+'</span><span class="pt">'+esc(q.t)+'</span></div>';
+  }).reverse().join("");
+}
+
+function paintPos(){
+  const el=document.getElementById("pos");
+  if(!el)return;
+  el.innerHTML=pad2(idx+1)+"&thinsp;<small>/ "+pad2(deck.length)+"</small>";
+}
+
+function paintScrub(){
+  const host=document.getElementById("scrub");
+  if(!host)return;
+  host.innerHTML=deck.map(function(p,i){
+    return '<button class="tick'+(i===idx?" here":"")+'" data-i="'+i+'" title="'+esc(p.t)+' — '+esc(p.id)+'" aria-label="'+esc(p.t)+'"></button>';
+  }).join("");
+  Array.prototype.forEach.call(host.querySelectorAll(".tick"),function(el){
+    el.addEventListener("click",function(){ deal(Number(el.getAttribute("data-i")), Number(el.getAttribute("data-i"))>=idx?"R":"L"); });
+  });
+  paintPos();
+}
+
+function paintSheet(){
+  const grid=document.getElementById("sheetgrid");
+  const count=document.getElementById("sheetcount");
+  if(!grid)return;
+  if(count) count.textContent=deck.length+" of "+PACKS.length+" packs in the deck";
+  grid.innerHTML=deck.map(function(p,i){
+    return '<button class="icard'+(i===idx?" here":"")+'" data-i="'+i+'">'+
+      '<span class="n">'+pad2(i+1)+" / "+pad2(deck.length)+'</span>'+
+      '<span class="t"><span class="swatch sw-'+p.ap+'"></span>'+esc(p.t)+'</span>'+
+      '<span class="s">'+esc(p.id)+' &middot; '+p.sc+' sounds &middot; '+p.boundEvents.length+' hooks &middot; '+
+        p.cov.c.direct+"/"+p.cov.x.direct+"/"+p.cov.u.direct+' c·x·u</span>'+
+    '</button>';
+  }).join("");
+  Array.prototype.forEach.call(grid.querySelectorAll(".icard"),function(el){
+    el.addEventListener("click",function(){
+      const i=Number(el.getAttribute("data-i"));
+      closeSheet();
+      deal(i,i>=idx?"R":"L");
+    });
+  });
+}
+function openSheet(){
+  const s=document.getElementById("sheet");
+  paintSheet();
+  s.hidden=false;
+  document.getElementById("indexBtn").setAttribute("aria-expanded","true");
+}
+function closeSheet(){
+  document.getElementById("sheet").hidden=true;
+  document.getElementById("indexBtn").setAttribute("aria-expanded","false");
+}
+
+/* ---------------- filter rail ---------------- */
+function chip(container,key,value,label,hot){
+  const b=document.createElement("button");
+  b.className="chip"+(hot?" hotstate":"");
+  b.setAttribute("data-k",key);
+  b.setAttribute("data-v",value);
+  b.setAttribute("aria-pressed", key==="sort" ? String(state.sort===value)
+    : String(state[key] && state[key].has(value)));
+  b.textContent=label;
+  b.addEventListener("click",function(){
+    const keep=deck.length?deck[idx].id:null;
+    if(key==="sort"){
+      state.sort=value;
+      Array.prototype.forEach.call(document.querySelectorAll('#f-sort .chip'),function(c){
+        c.setAttribute("aria-pressed",String(c.getAttribute("data-v")===value));
+      });
+    }else{
+      const set=state[key];
+      if(set.has(value)) set.delete(value); else set.add(value);
+      b.setAttribute("aria-pressed",String(set.has(value)));
+    }
+    rebuild(keep);
+  });
+  container.appendChild(b);
+  return b;
+}
+function buildRail(){
+  const ap=document.getElementById("f-approach");
+  ["tactile","jingle","bed","hybrid"].forEach(function(v){
+    chip(ap,"ap",v,v+" "+PACKS.filter(function(p){return p.ap===v;}).length);
+  });
+  const ag=document.getElementById("f-agent");
+  ["c","x","u"].forEach(function(a){
+    const c=chip(ag,"agent",a,AGENTS[a].split(" ")[0]);
+    c.title="Keep only packs where at least 3 in 4 bindings fire natively on "+AGENTS[a];
+  });
+  const tg=document.getElementById("f-tag");
+  const counts={};
+  PACKS.forEach(function(p){p.tags.forEach(function(t){counts[t]=(counts[t]||0)+1;});});
+  Object.keys(counts).sort(function(a,b){return counts[b]-counts[a]||(a<b?-1:1);}).slice(0,8)
+    .forEach(function(t){ chip(tg,"tag",t,t); });
+  const tr=document.getElementById("f-trust");
+  [["curated","curated"],["attested","attested"],["unverified","unverified"]].forEach(function(pair){
+    const c=chip(tr,"trust",pair[0],pair[1],pair[0]==="unverified");
+    if(pair[0]==="unverified") c.title="Unverified scopes are excluded from the default deck (spec §8.3). Toggle to deal them in.";
+  });
+  const so=document.getElementById("f-sort");
+  [["newest","newest"],["installs","most installed"],["plays","most played"]].forEach(function(pair){
+    chip(so,"sort",pair[0],pair[1]);
+  });
+}
+
+/* ---------------- input ---------------- */
+function wire(){
+  document.getElementById("next").addEventListener("click",function(){nav(1);});
+  document.getElementById("prev").addEventListener("click",function(){nav(-1);});
+  document.getElementById("volume").addEventListener("input",applyVolume);
+  document.getElementById("autocue").addEventListener("click",function(){
+    const el=document.getElementById("autocue");
+    el.setAttribute("aria-pressed", el.getAttribute("aria-pressed")==="true"?"false":"true");
+  });
+  document.getElementById("indexBtn").addEventListener("click",function(){
+    const s=document.getElementById("sheet");
+    if(s.hidden) openSheet(); else closeSheet();
+  });
+  const gate=document.getElementById("gate");
+  gate.addEventListener("click",powerOn);
+  document.getElementById("cut").addEventListener("click",function(e){e.stopPropagation();powerOn();});
+
+  /* leaving the organ returns the hero waveform to the pack's primary cue */
+  const stage=document.getElementById("stage");
+  stage.addEventListener("mouseleave",function(){
+    const p=deck[idx];
+    if(!p)return;
+    focusEv=p.primary;
+    const host=document.getElementById("organ");
+    if(host) Array.prototype.forEach.call(host.querySelectorAll(".hook"),function(el){
+      el.classList.toggle("focused",el.getAttribute("data-ev")===focusEv);
+    });
+    paintHero();
+  });
+
+  document.addEventListener("keydown",function(e){
+    if(!powered && (e.key===" "||e.key==="Enter")){ powerOn(); e.preventDefault(); return; }
+    if(e.key==="Escape"){ closeSheet(); return; }
+    if(e.key==="ArrowRight"||e.key==="PageDown"){ nav(1); e.preventDefault(); }
+    else if(e.key==="ArrowLeft"||e.key==="PageUp"){ nav(-1); e.preventDefault(); }
+    else if(e.key==="Home"){ deal(0,"L"); e.preventDefault(); }
+    else if(e.key==="End"){ deal(deck.length-1,"R"); e.preventDefault(); }
+    else if(e.key==="i"||e.key==="I"){ const s=document.getElementById("sheet"); if(s.hidden)openSheet();else closeSheet(); }
+    else if(e.key===" "){ const p=deck[idx]; if(p){ audition(p.primary,false); } e.preventDefault(); }
+    else if(e.key==="m"||e.key==="M"){ stopAll(); }
+  });
+
+  /* drag / swipe the top card */
+  let down=false, x0=0, moved=0;
+  stage.addEventListener("pointerdown",function(e){
+    if(e.target && e.target.closest && e.target.closest(".hook,#copybtn,.nav,.tick")) return;
+    down=true;x0=e.clientX||0;moved=0;
+  });
+  stage.addEventListener("pointermove",function(e){
+    if(!down)return;
+    moved=(e.clientX||0)-x0;
+    const card=document.getElementById("card");
+    if(card && !REDUCED) card.style.transform="translateX("+(moved*0.35)+"px) rotate("+(moved*0.006)+"deg)";
+  });
+  const release=function(){
+    if(!down)return;
+    down=false;
+    const card=document.getElementById("card");
+    if(card) card.style.transform="";
+    if(moved<=-60) nav(1);
+    else if(moved>=60) nav(-1);
+    moved=0;
+  };
+  stage.addEventListener("pointerup",release);
+  stage.addEventListener("pointercancel",release);
+  stage.addEventListener("pointerleave",release);
+
+  window.addEventListener("resize",function(){ paintHero(); });
+}
+
+function boot(){
+  buildRail();
+  wire();
+  rebuild(null);        /* rebuild renders the top card itself */
+}
+boot();
+</script>
+</body>
+</html>

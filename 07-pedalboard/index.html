@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tambre — the wall (variant 07, Pedalboard)</title>
+<style>
+/* ===========================================================
+   TAMBRE — variant 07 "Pedalboard"
+   Skeuomorphic by intent. Spec §12's "no shadows deeper than
+   2px / no gradients" is deliberately and totally waived here;
+   see direction.md → Load-bearing decisions.
+   =========================================================== */
+
+:root{
+  --board:#1b1a18;
+  --board2:#121110;
+  --velcro:#2a2724;
+  --rail:#3a3733;
+  --steel1:#8d9299;
+  --steel2:#5c6167;
+  --steel3:#40444a;
+  --lcd:#0d1a12;
+  --lcdink:#7cf0a4;
+  --hot:#ff5a3c;
+  --amber:#ffb43c;
+  --dead:#3b3a38;
+  --ink:#e8e4dc;
+  --dim:#9a948a;
+  --cond:"Arial Narrow","Helvetica Neue Condensed",Haettenschweiler,Impact,
+         "Liberation Sans Narrow",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace;
+  --coat:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
+  --hammertone:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='90'%3E%3Cfilter id='h'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.06' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='90' height='90' filter='url(%23h)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #2c2925 0%, transparent 60%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.22) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(0deg,  rgba(0,0,0,.22) 0 1px, transparent 1px 9px),
+    linear-gradient(180deg, var(--board) 0%, var(--board2) 100%);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-family:var(--mono);
+  font-size:13px;
+  -webkit-font-smoothing:antialiased;
+  padding:0 0 60px;
+}
+.wrap{max-width:1360px;margin:0 auto;padding:0 18px}
+
+/* ---------------- the rig / power strip ---------------- */
+.rig{
+  position:sticky;top:0;z-index:40;
+  margin:0 0 14px;
+  background:
+    var(--coat),
+    linear-gradient(180deg,#6f747b 0%,#4a4e54 42%,#383c41 43%,#2b2e33 100%);
+  background-blend-mode:soft-light,normal;
+  border-bottom:3px solid #17191c;
+  box-shadow:0 14px 30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.28);
+}
+.rig-in{display:flex;flex-wrap:wrap;gap:16px;align-items:center;
+  max-width:1360px;margin:0 auto;padding:12px 18px}
+
+.brandplate{
+  padding:6px 14px 7px;border-radius:3px;
+  background:linear-gradient(180deg,#f4efe4,#cfc7b6 60%,#b3aa98);
+  border:1px solid #8b8375;
+  box-shadow:inset 0 1px 0 #fff, 0 3px 6px rgba(0,0,0,.5);
+  color:#211d16;
+}
+.brandplate b{
+  display:block;font-family:var(--cond);font-weight:700;
+  font-size:30px;line-height:.92;letter-spacing:.10em;text-transform:uppercase;
+}
+.brandplate span{display:block;font-size:9px;letter-spacing:.16em;color:#5d564a;text-transform:uppercase}
+
+/* mains rocker — rectangular, red, sprung. NOT a round button. */
+.mains{display:flex;align-items:center;gap:12px}
+.rocker{
+  appearance:none;border:0;cursor:pointer;padding:0;
+  width:96px;height:52px;border-radius:5px;
+  background:linear-gradient(180deg,#26282b,#111213);
+  border:2px solid #0b0c0d;
+  box-shadow:inset 0 0 0 2px #4b4f54, 0 4px 8px rgba(0,0,0,.6);
+  position:relative;overflow:hidden;
+}
+.rocker .bat{
+  position:absolute;left:6px;right:6px;height:20px;border-radius:3px;
+  background:linear-gradient(180deg,#e04a2d,#8e2412);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 2px 4px rgba(0,0,0,.6);
+  transition:transform 90ms cubic-bezier(.3,1.6,.5,1), top 90ms;
+  top:6px;
+}
+.rocker .bat.lower{top:24px}
+.rocker[aria-pressed="true"] .bat{background:linear-gradient(180deg,#ff6a44,#c23415)}
+.rocker .cap{
+  position:absolute;left:0;right:0;text-align:center;
+  font-family:var(--cond);font-size:11px;letter-spacing:.16em;color:#cfd3d8;
+  text-transform:uppercase;
+}
+.rocker .cap.on{top:1px}
+.rocker .cap.off{bottom:1px}
+.rocker[aria-pressed="true"] .bat{transform:translateY(18px)}
+.mains-lamp{
+  width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#5a2a20,#2a1310 70%);
+  box-shadow:inset 0 0 3px #000, 0 0 0 2px #24262a;
+}
+.mains-lamp.lit{
+  background:radial-gradient(circle at 35% 30%,#fff2ec,var(--hot) 55%,#7c1c08 100%);
+  box-shadow:0 0 10px 2px rgba(255,90,60,.75), 0 0 0 2px #24262a;
+}
+.mains-note{font-size:10px;letter-spacing:.10em;color:#cbd0d6;max-width:150px;line-height:1.35;text-transform:uppercase}
+
+/* master volume knob */
+.mvol{display:flex;align-items:center;gap:9px}
+.knob{
+  width:44px;height:44px;border-radius:50%;flex:0 0 auto;cursor:ns-resize;
+  background:
+    radial-gradient(circle at 50% 118%, rgba(255,255,255,.30), transparent 58%),
+    conic-gradient(from 200deg,#2a2c2f,#4d5257 25%,#1e2023 55%,#4d5257 80%,#2a2c2f);
+  border:1px solid #0c0d0e;
+  box-shadow:inset 0 2px 4px rgba(255,255,255,.18), inset 0 -3px 6px rgba(0,0,0,.7),
+             0 4px 9px rgba(0,0,0,.6);
+  position:relative;
+}
+.knob:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.knob i{
+  position:absolute;left:50%;top:5px;width:2px;height:15px;margin-left:-1px;
+  background:#f1ede4;border-radius:1px;transform-origin:50% 100%;
+  transform:rotate(var(--a,0deg));box-shadow:0 0 3px rgba(0,0,0,.8);
+}
+.knob-cap{font-family:var(--cond);font-size:10px;letter-spacing:.14em;color:#d5dade;text-transform:uppercase}
+
+/* LCD readout */
+.lcd{
+  flex:1 1 320px;min-width:280px;
+  background:linear-gradient(180deg,#08130d,#0f2016 60%,#08120c);
+  border:2px solid #0a0b0b;border-radius:4px;
+  box-shadow:inset 0 0 22px rgba(0,0,0,.9), inset 0 0 0 1px #1d3a28,
+             0 3px 7px rgba(0,0,0,.55);
+  padding:8px 11px;color:var(--lcdink);
+  font-size:11px;line-height:1.5;letter-spacing:.05em;
+  text-shadow:0 0 6px rgba(124,240,164,.5);
+  min-height:60px;
+}
+.lcd .l1{font-family:var(--cond);font-size:17px;letter-spacing:.10em;text-transform:uppercase}
+.lcd .l2{color:#4fbe7c;font-size:10.5px}
+.lcd .l3{color:#3d9b63;font-size:10px}
+
+/* ---------------- patch bay / filter rail ---------------- */
+.bay{
+  background:
+    var(--coat),
+    linear-gradient(180deg,#5b6066 0%,#42464b 45%,#33373b 100%);
+  background-blend-mode:soft-light,normal;
+  border:2px solid #191b1d;border-radius:6px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 10px 22px rgba(0,0,0,.5);
+  padding:14px 16px;margin-bottom:20px;
+  display:grid;gap:18px;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+}
+.bay section{min-width:0}
+.bay h3{
+  margin:0 0 9px;font-family:var(--cond);font-size:11px;font-weight:700;
+  letter-spacing:.20em;text-transform:uppercase;color:#e7ebef;
+  border-bottom:1px solid rgba(0,0,0,.4);padding-bottom:5px;
+  text-shadow:0 1px 0 rgba(0,0,0,.6);
+}
+
+/* rotary selector for approach */
+.rotary{display:flex;gap:12px;align-items:center}
+.dial{
+  width:64px;height:64px;flex:0 0 auto;border-radius:50%;cursor:pointer;
+  background:
+    radial-gradient(circle at 50% 120%, rgba(255,255,255,.25), transparent 55%),
+    conic-gradient(from 190deg,#202326,#565b61 22%,#191b1e 52%,#565b61 78%,#202326);
+  border:1px solid #0b0c0d;
+  box-shadow:inset 0 2px 5px rgba(255,255,255,.2), inset 0 -4px 8px rgba(0,0,0,.75),
+             0 5px 11px rgba(0,0,0,.6);
+  position:relative;
+}
+.dial:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.dial i{
+  position:absolute;left:50%;top:6px;width:3px;height:20px;margin-left:-1.5px;
+  background:var(--amber);border-radius:2px;transform-origin:50% 100%;
+  transform:rotate(var(--a,-120deg));
+  transition:transform 120ms cubic-bezier(.2,1.4,.4,1);
+  box-shadow:0 0 6px rgba(255,180,60,.7);
+}
+.rot-opts{display:flex;flex-direction:column;gap:2px}
+.rot-opt{
+  appearance:none;background:none;border:0;padding:2px 5px;cursor:pointer;
+  font-family:var(--cond);font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+  color:#9aa1a8;text-align:left;border-radius:2px;
+}
+.rot-opt[aria-checked="true"]{color:#fff;background:rgba(255,180,60,.20);box-shadow:inset 0 0 0 1px rgba(255,180,60,.5)}
+.rot-opt:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+
+/* mini toggle switches (agent / trust / legend) */
+.toggles{display:flex;flex-direction:column;gap:7px}
+.tog{
+  appearance:none;border:0;background:none;padding:0;cursor:pointer;
+  display:flex;align-items:center;gap:9px;text-align:left;
+}
+.tog .body{
+  width:26px;height:36px;border-radius:3px;flex:0 0 auto;position:relative;
+  background:linear-gradient(180deg,#1c1e21,#0e0f10);
+  border:1px solid #07080a;
+  box-shadow:inset 0 0 0 1px #4a4e53, 0 3px 6px rgba(0,0,0,.6);
+}
+.tog .body::after{
+  content:"";position:absolute;left:4px;right:4px;height:14px;border-radius:2px;
+  background:linear-gradient(180deg,#dfe3e7,#8d949b);
+  box-shadow:inset 0 1px 0 #fff, 0 2px 4px rgba(0,0,0,.6);
+  top:18px;transition:top 90ms cubic-bezier(.3,1.6,.5,1);
+}
+.tog[aria-pressed="true"] .body::after{top:4px;background:linear-gradient(180deg,#fff,#b9c1c8)}
+.tog .lamp{
+  position:absolute;left:50%;margin-left:-3px;bottom:-9px;
+  width:6px;height:6px;border-radius:50%;background:#2c2f33;
+}
+.tog[aria-pressed="true"] .lamp{background:#7cf0a4;box-shadow:0 0 7px rgba(124,240,164,.9)}
+.tog .txt{font-family:var(--cond);font-size:12.5px;letter-spacing:.13em;
+  text-transform:uppercase;color:#b9c0c7;line-height:1.15}
+.tog[aria-pressed="true"] .txt{color:#fff}
+.tog .sub{display:block;font-family:var(--mono);font-size:9px;letter-spacing:.04em;
+  color:#8c939a;text-transform:none}
+.tog:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:3px}
+.tog.danger[aria-pressed="true"] .lamp{background:var(--hot);box-shadow:0 0 7px rgba(255,90,60,.9)}
+
+/* tag jack field */
+.jacks{display:flex;flex-wrap:wrap;gap:7px}
+.jack{
+  appearance:none;cursor:pointer;padding:5px 6px 6px;border-radius:4px;
+  background:linear-gradient(180deg,#4a4e53,#31353a);
+  border:1px solid #16181a;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18), 0 2px 4px rgba(0,0,0,.5);
+  display:flex;flex-direction:column;align-items:center;gap:3px;width:60px;
+}
+.jack .hole{
+  width:17px;height:17px;border-radius:50%;
+  background:radial-gradient(circle at 50% 35%,#0a0a0b 45%,#26292d 46%,#14161a 100%);
+  box-shadow:inset 0 2px 4px #000, 0 0 0 1px #5b6167;
+}
+.jack[aria-pressed="true"] .hole{
+  background:radial-gradient(circle at 50% 35%,#ffe9b0 30%,#c98c1e 55%,#5a3a06 100%);
+  box-shadow:0 0 8px rgba(255,180,60,.7), 0 0 0 1px #7a6320;
+}
+.jack .lbl{font-family:var(--cond);font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;color:#c3c9cf;max-width:54px;overflow:hidden;text-overflow:ellipsis}
+.jack[aria-pressed="true"] .lbl{color:#ffd58a}
+.jack:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* sort slide switch */
+.slide{
+  background:linear-gradient(180deg,#22252a,#14161a);
+  border:1px solid #0a0b0c;border-radius:5px;padding:5px;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.8);
+  display:flex;flex-direction:column;gap:3px;position:relative;
+}
+.slide-opt{
+  appearance:none;background:none;border:0;cursor:pointer;padding:6px 10px 6px 26px;
+  font-family:var(--cond);font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+  color:#98a0a7;text-align:left;border-radius:3px;position:relative;
+}
+.slide-opt::before{
+  content:"";position:absolute;left:7px;top:50%;margin-top:-4px;
+  width:8px;height:8px;border-radius:50%;background:#33373c;
+}
+.slide-opt[aria-checked="true"]{
+  color:#fff;background:linear-gradient(180deg,#5d636a,#3d4247);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25), 0 2px 4px rgba(0,0,0,.6);
+}
+.slide-opt[aria-checked="true"]::before{background:var(--amber);box-shadow:0 0 7px rgba(255,180,60,.9)}
+.slide-opt:focus-visible{outline:2px solid var(--amber);outline-offset:1px}
+
+.tally{
+  grid-column:1/-1;display:flex;flex-wrap:wrap;gap:14px;align-items:center;
+  border-top:1px solid rgba(0,0,0,.45);padding-top:11px;
+  font-size:10.5px;letter-spacing:.05em;color:#d3d8dd;
+}
+.tally b{color:#fff}
+.tally .drawer{color:#ffb9a8}
+.bypass{
+  appearance:none;cursor:pointer;margin-left:auto;
+  font-family:var(--cond);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:#e9edf1;padding:6px 12px;border-radius:3px;
+  background:linear-gradient(180deg,#5a5f65,#3a3e43);
+  border:1px solid #17191b;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22), 0 3px 6px rgba(0,0,0,.5);
+}
+.bypass:active{transform:translateY(1px)}
+.bypass:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* ---------------- the wall of pedals ---------------- */
+.wall{
+  display:grid;gap:22px;
+  grid-template-columns:repeat(auto-fill,minmax(212px,1fr));
+  grid-auto-flow:row dense;
+  align-items:start;
+}
+.pedal.w2{grid-column:span 2}
+.pedal.w3{grid-column:span 3}
+@media (max-width:1080px){ .pedal.w3{grid-column:span 2} }
+@media (max-width:720px){ .pedal.w2,.pedal.w3{grid-column:span 1} }
+
+.pedal{
+  position:relative;isolation:isolate;
+  padding:16px 14px 12px;
+  border-radius:8px;
+  transform:rotate(var(--tilt,0deg));
+  background-image:var(--coat), var(--shellgrad);
+  background-blend-mode:soft-light,normal;
+  border:1px solid var(--edge);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.34),
+    inset 0 -3px 0 rgba(0,0,0,.34),
+    inset 2px 0 0 rgba(255,255,255,.10),
+    inset -2px 0 0 rgba(0,0,0,.18),
+    0 16px 26px rgba(0,0,0,.55),
+    0 3px 0 var(--edge);
+  color:var(--pink);
+  transition:transform 110ms ease, box-shadow 110ms ease;
+}
+.pedal:hover{transform:rotate(var(--tilt,0deg)) translateY(-2px)}
+.pedal.sparkle::before{
+  content:"";position:absolute;inset:0;border-radius:8px;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(circle at 12% 22%, rgba(255,255,255,.55) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 63% 8%,  rgba(255,255,255,.42) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 31% 74%, rgba(255,255,255,.48) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 84% 55%, rgba(255,255,255,.40) 0 1px, transparent 1.6px);
+  background-size:29px 29px,37px 37px,23px 23px,41px 41px;
+  opacity:.75;mix-blend-mode:screen;
+}
+.pedal.hammer{background-image:var(--hammertone),var(--coat),var(--shellgrad);
+  background-blend-mode:overlay,soft-light,normal}
+.pedal > *{position:relative;z-index:1}
+
+.screw{
+  position:absolute;width:11px;height:11px;border-radius:50%;z-index:2;
+  background:radial-gradient(circle at 35% 30%,#f2f4f6,#8f959b 55%,#4d5257 100%);
+  box-shadow:inset 0 -1px 2px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.55);
+}
+.screw::after{
+  content:"";position:absolute;left:1.5px;right:1.5px;top:50%;height:1.6px;margin-top:-.8px;
+  background:#2f3337;border-radius:1px;transform:rotate(var(--sr,25deg));
+}
+.screw.tl{top:6px;left:6px}   .screw.tr{top:6px;right:6px}
+.screw.bl{bottom:6px;left:6px} .screw.br{bottom:6px;right:6px}
+
+/* silkscreen */
+.silk{margin:0 18px 10px;text-align:center}
+.silk h2{
+  margin:0;font-family:var(--cond);font-weight:700;text-transform:uppercase;
+  font-size:clamp(19px,3.1vw,30px);line-height:.94;letter-spacing:.035em;
+  overflow-wrap:anywhere;hyphens:auto;
+  color:var(--pink);
+  text-shadow:0 1px 0 var(--emb);
+}
+.silk h2.long{font-size:clamp(13px,1.6vw,16px);letter-spacing:.06em;line-height:1.08}
+.silk h2.med{font-size:clamp(16px,2.2vw,22px)}
+.silk .scope-id{
+  display:block;margin-top:4px;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.06em;opacity:.78;overflow-wrap:anywhere;
+}
+.silk .desc{
+  margin:7px 0 0;font-family:var(--mono);font-size:10px;line-height:1.45;
+  opacity:.74;text-align:left;
+}
+
+.statusled{
+  position:absolute;top:9px;left:50%;margin-left:-6px;width:12px;height:12px;
+  border-radius:50%;z-index:3;
+  background:radial-gradient(circle at 35% 30%,#4d3a1c,#1d1509 70%);
+  box-shadow:inset 0 0 3px #000, 0 0 0 2px rgba(0,0,0,.35);
+  transition:box-shadow 90ms linear, background 90ms linear;
+}
+.statusled.lit{
+  background:radial-gradient(circle at 35% 30%,#fffbe8,var(--amber) 50%,#8a4f00 100%);
+  box-shadow:0 0 12px 3px rgba(255,180,60,.85), 0 0 0 2px rgba(0,0,0,.35);
+}
+
+/* chassis row: scope window + control cluster */
+.chassis{display:flex;gap:10px;align-items:stretch;margin:0 0 12px}
+.scopewin{
+  flex:1 1 auto;min-width:0;
+  background:linear-gradient(180deg,#050c08,#0b1710 55%,#050b07);
+  border:2px solid rgba(0,0,0,.6);border-radius:4px;
+  box-shadow:inset 0 0 16px rgba(0,0,0,.9), inset 0 0 0 1px #1b3626;
+  padding:5px 6px 3px;position:relative;overflow:hidden;
+}
+.scopewin canvas{display:block;width:100%;height:38px}
+.scopewin .cap{
+  display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;
+  color:#5cc482;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cluster{display:flex;flex-direction:column;gap:6px;align-items:center;flex:0 0 auto}
+.bigknob{
+  width:38px;height:38px;border-radius:50%;
+  background:
+    radial-gradient(circle at 50% 118%, rgba(255,255,255,.28), transparent 58%),
+    conic-gradient(from 200deg,#232528,#4b5055 25%,#191b1e 55%,#4b5055 80%,#232528);
+  border:1px solid #0b0c0d;position:relative;
+  box-shadow:inset 0 2px 4px rgba(255,255,255,.18), inset 0 -3px 6px rgba(0,0,0,.7),
+             0 3px 7px rgba(0,0,0,.55);
+}
+.bigknob i{position:absolute;left:50%;top:4px;width:2px;height:13px;margin-left:-1px;
+  background:#f4f0e6;border-radius:1px;transform-origin:50% 100%;transform:rotate(var(--a,0deg))}
+.cluster .cap{font-family:var(--cond);font-size:9px;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--pink);opacity:.85}
+
+/* stamped chips */
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 11px;justify-content:center}
+.chip{
+  font-family:var(--cond);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  padding:3px 8px 4px;border-radius:2px;
+  background:rgba(0,0,0,.16);color:var(--pink);
+  border:1px solid rgba(0,0,0,.30);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.22);
+}
+.chip.seal{
+  border-radius:20px;border-style:double;border-width:3px;
+  letter-spacing:.18em;font-size:9px;padding:2px 9px 3px;
+}
+.chip.seal.curated{background:rgba(255,180,60,.22);border-color:rgba(120,70,0,.55)}
+.chip.seal.attested{background:rgba(124,240,164,.16);border-color:rgba(0,80,40,.45)}
+.chip.seal.unverified{background:rgba(255,90,60,.18);border-color:rgba(120,20,0,.5)}
+
+/* ---------------- footswitch bank ---------------- */
+.bank{
+  display:grid;gap:8px;
+  grid-template-columns:repeat(auto-fill,minmax(92px,1fr));
+  padding:10px 8px;border-radius:6px;
+  background:rgba(0,0,0,.13);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(0,0,0,.22);
+}
+.bank-hd{
+  grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;
+  font-family:var(--cond);font-size:9.5px;letter-spacing:.17em;text-transform:uppercase;
+  color:var(--pink);opacity:.8;border-bottom:1px dashed rgba(0,0,0,.28);padding-bottom:4px;
+}
+
+.fsw{
+  appearance:none;border:0;cursor:pointer;padding:0;background:none;
+  display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;
+  color:var(--pink);text-align:center;
+}
+.fsw .stomp{
+  width:32px;height:32px;border-radius:50%;position:relative;flex:0 0 auto;
+  background:
+    radial-gradient(circle at 50% 22%, #f4f6f8 0%, #b8bec4 34%, #6f757b 62%, #3a3e43 100%);
+  box-shadow:
+    inset 0 -3px 5px rgba(0,0,0,.55), inset 0 2px 3px rgba(255,255,255,.55),
+    0 5px 0 #23262a, 0 8px 12px rgba(0,0,0,.6);
+  transition:transform 70ms cubic-bezier(.25,1.5,.5,1), box-shadow 70ms linear;
+}
+.fsw .stomp::after{
+  content:"";position:absolute;inset:8px;border-radius:50%;
+  background:radial-gradient(circle at 50% 30%,#dfe4e9,#7c8288 70%,#4a4e53);
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.7), inset 0 -2px 3px rgba(0,0,0,.5);
+}
+.fsw:hover .stomp{transform:translateY(2px);box-shadow:inset 0 -2px 4px rgba(0,0,0,.55),
+  inset 0 2px 3px rgba(255,255,255,.5), 0 3px 0 #23262a, 0 5px 8px rgba(0,0,0,.55)}
+.fsw.down .stomp,.fsw:active .stomp{
+  transform:translateY(5px);
+  box-shadow:inset 0 -1px 3px rgba(0,0,0,.6), inset 0 1px 2px rgba(255,255,255,.4),
+             0 0 0 #23262a, 0 2px 5px rgba(0,0,0,.5);
+}
+.fsw:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:6px}
+
+.fsw .fled{
+  width:7px;height:7px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#4b3a1a,#181207 70%);
+  box-shadow:inset 0 0 2px #000;
+  transition:box-shadow 80ms linear, background 80ms linear;
+}
+.fsw.down .fled,.fsw:hover .fled{
+  background:radial-gradient(circle at 35% 30%,#fff6dd,var(--hot) 55%,#7a1a05 100%);
+  box-shadow:0 0 9px 2px rgba(255,90,60,.85);
+}
+.fsw .fname{
+  font-family:var(--cond);font-size:11px;letter-spacing:.055em;line-height:1.06;
+  text-transform:uppercase;overflow-wrap:anywhere;max-width:100%;
+  text-shadow:0 1px 0 var(--emb);
+}
+body.legend .fsw .fname{font-family:var(--mono);font-size:8.5px;letter-spacing:0}
+.fsw .fmeta{
+  display:flex;align-items:center;gap:4px;justify-content:center;
+  font-family:var(--mono);font-size:8px;letter-spacing:.01em;opacity:.82;
+  max-width:100%;overflow:hidden;
+}
+.fsw .fmeta span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:56px}
+.miniknob{
+  width:13px;height:13px;border-radius:50%;flex:0 0 auto;position:relative;
+  background:radial-gradient(circle at 50% 118%, rgba(255,255,255,.3), transparent 60%),
+             conic-gradient(from 200deg,#23262a,#4a4f54 30%,#191b1e 60%,#4a4f54 85%,#23262a);
+  border:1px solid rgba(0,0,0,.55);
+}
+.miniknob::after{
+  content:"";position:absolute;left:50%;top:1px;width:1.4px;height:5.5px;margin-left:-.7px;
+  background:#fff6e2;transform-origin:50% 100%;transform:rotate(var(--a,0deg));
+}
+.lamps{display:flex;gap:3px;align-items:center}
+.lamps i{
+  width:6px;height:6px;border-radius:50%;background:var(--dead);
+  box-shadow:inset 0 0 2px rgba(0,0,0,.8);
+}
+.lamps i.native{background:#4ee08a;box-shadow:0 0 5px rgba(78,224,138,.8)}
+.lamps i.fallback{background:var(--amber);box-shadow:0 0 5px rgba(255,180,60,.7)}
+.lamps i.none{background:#3a3936}
+
+/* spec plate at the bottom of the enclosure */
+.plate{
+  margin:11px -6px -4px;padding:8px 9px;border-radius:3px;
+  background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(0,0,0,.16));
+  border:1px solid rgba(0,0,0,.28);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
+  font-family:var(--mono);font-size:9px;letter-spacing:.02em;line-height:1.6;
+  color:var(--pink);
+}
+.plate .row{display:flex;flex-wrap:wrap;gap:4px 10px}
+.plate b{font-weight:700}
+.plate .cov{display:flex;flex-wrap:wrap;gap:9px;margin-top:3px;opacity:.92}
+.plate .cov u{text-decoration:none;opacity:.7}
+.plate .tags{margin-top:3px;opacity:.72;overflow-wrap:anywhere}
+
+/* ---------------- pager ---------------- */
+.pager{
+  margin:26px auto 0;max-width:1360px;padding:14px 18px;
+  display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;
+  background:var(--coat),linear-gradient(180deg,#4d5257,#33373b);
+  background-blend-mode:soft-light,normal;
+  border:2px solid #191b1d;border-radius:6px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.2), 0 8px 18px rgba(0,0,0,.5);
+}
+.pagebtn{
+  appearance:none;cursor:pointer;border:0;padding:0;background:none;
+  display:flex;flex-direction:column;align-items:center;gap:5px;color:#e6eaee;
+  font-family:var(--cond);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+}
+.pagebtn .stomp{
+  width:40px;height:40px;border-radius:50%;
+  background:radial-gradient(circle at 50% 22%,#f4f6f8,#b8bec4 34%,#6f757b 62%,#3a3e43 100%);
+  box-shadow:inset 0 -3px 5px rgba(0,0,0,.55), inset 0 2px 3px rgba(255,255,255,.55),
+             0 5px 0 #1e2124, 0 8px 12px rgba(0,0,0,.6);
+  transition:transform 70ms cubic-bezier(.25,1.5,.5,1);
+}
+.pagebtn:active .stomp{transform:translateY(5px)}
+.pagebtn:disabled{opacity:.34;cursor:not-allowed}
+.pagebtn:focus-visible{outline:2px solid var(--amber);outline-offset:3px;border-radius:6px}
+.shelfled{display:flex;gap:7px;align-items:center}
+.shelfled i{
+  width:9px;height:9px;border-radius:50%;background:#2b2e32;
+  box-shadow:inset 0 0 3px #000;
+}
+.shelfled i.on{background:var(--amber);box-shadow:0 0 9px rgba(255,180,60,.9)}
+.shelfcap{font-family:var(--cond);font-size:13px;letter-spacing:.16em;
+  text-transform:uppercase;color:#eef2f5}
+
+.empty{
+  grid-column:1/-1;padding:44px 20px;text-align:center;color:var(--dim);
+  font-family:var(--cond);font-size:19px;letter-spacing:.16em;text-transform:uppercase;
+}
+
+footer.notes{
+  max-width:1360px;margin:30px auto 0;padding:0 18px;
+  font-size:10.5px;line-height:1.75;color:#8f8a80;
+}
+footer.notes b{color:#c8c2b6}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------------- finishes ---------------- */
+.f-cream   {--shellgrad:linear-gradient(165deg,#f6ecd8,#e2d3b6 55%,#cbb994);--edge:#a9977a;--pink:#2b2118;--emb:rgba(255,255,255,.55)}
+.f-sand    {--shellgrad:linear-gradient(165deg,#e2d1ab,#cbb68c 55%,#b09a6e);--edge:#8d7a55;--pink:#33281a;--emb:rgba(255,255,255,.45)}
+.f-tangerine{--shellgrad:linear-gradient(165deg,#ff9a3c,#ef7514 52%,#c1520a);--edge:#8a3a05;--pink:#2a1204;--emb:rgba(255,255,255,.40)}
+.f-oxblood {--shellgrad:linear-gradient(165deg,#a02c37,#7a1f28 50%,#4a0f16);--edge:#320a0f;--pink:#f6e0d8;--emb:rgba(0,0,0,.55)}
+.f-teal    {--shellgrad:linear-gradient(165deg,#1f9b8e,#137a70 52%,#0a4a45);--edge:#063230;--pink:#e8f8f4;--emb:rgba(0,0,0,.5)}
+.f-grape   {--shellgrad:linear-gradient(165deg,#8a54cf,#6a3ab0 50%,#3d1d6b);--edge:#28104a;--pink:#f2e8ff;--emb:rgba(0,0,0,.55)}
+.f-olive   {--shellgrad:linear-gradient(165deg,#8a9152,#6b7240 52%,#434821);--edge:#2c3014;--pink:#f4f5e2;--emb:rgba(0,0,0,.5)}
+.f-seafoam {--shellgrad:linear-gradient(165deg,#a6ded0,#86c9b7 52%,#5f9f8c);--edge:#457a69;--pink:#10322a;--emb:rgba(255,255,255,.45)}
+.f-charcoal{--shellgrad:linear-gradient(165deg,#5a6067,#43484e 52%,#2b2f34);--edge:#1a1d21;--pink:#e9eff4;--emb:rgba(0,0,0,.6)}
+.f-hammer  {--shellgrad:linear-gradient(165deg,#6b7178,#4d5359 52%,#33373c);--edge:#202428;--pink:#eaf0f5;--emb:rgba(0,0,0,.6)}
+.f-mustard {--shellgrad:linear-gradient(165deg,#f0bd3e,#d59f16 52%,#a5760a);--edge:#77540a;--pink:#2c1f03;--emb:rgba(255,255,255,.42)}
+.f-sky     {--shellgrad:linear-gradient(165deg,#93c8e6,#6ba7cb 52%,#4a80a5);--edge:#2f5a78;--pink:#0c2431;--emb:rgba(255,255,255,.45)}
+.f-copper  {--shellgrad:linear-gradient(165deg,#dc9a58,#c17d3c 52%,#8d5320);--edge:#603612;--pink:#fdf2e4;--emb:rgba(0,0,0,.5)}
+.f-rose    {--shellgrad:linear-gradient(165deg,#ef83ab,#d4547f 52%,#a5305a);--edge:#71183a;--pink:#fff0f5;--emb:rgba(0,0,0,.5)}
+.f-midnight{--shellgrad:linear-gradient(165deg,#33497a,#243a63 52%,#121e3b);--edge:#0b1329;--pink:#e2eaff;--emb:rgba(0,0,0,.6)}
+
+@media (prefers-reduced-motion: reduce){
+  *{transition:none!important;animation:none!important}
+  .pedal{transform:none!important}
+  .pedal:hover{transform:none!important}
+}
+
+</style>
+</head>
+<body>
+
+<header class="rig">
+  <div class="rig-in">
+    <div class="brandplate">
+      <b>Tambre</b>
+      <span>sound packs · bound to agent hooks</span>
+    </div>
+
+    <div class="mains">
+      <button class="rocker" id="mains" type="button" aria-pressed="false"
+              aria-label="Mains power — arms audio. No sound is produced until this is stomped.">
+        <span class="cap on">on</span>
+        <span class="bat" aria-hidden="true"></span>
+        <span class="cap off">off</span>
+      </button>
+      <span class="mains-lamp" id="mainslamp" aria-hidden="true"></span>
+      <span class="mains-note">mains<br>arms audio</span>
+    </div>
+
+    <div class="mvol">
+      <span class="knob" id="mvol" tabindex="0" role="slider"
+            aria-label="Master volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="80"
+            style="--a:81deg"><i></i></span>
+      <span class="knob-cap">master<br><span id="mvolcap">80%</span></span>
+    </div>
+
+    <div class="lcd" role="status" aria-live="polite">
+      <div class="l1">MAINS OFF</div>
+      <div class="l2">Stomp the red rocker to power the board.</div>
+      <div class="l3">No sound is produced before that gesture.</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="bay">
+    <section>
+      <h3>approach · rotary</h3>
+      <div class="rotary">
+        <span class="dial" id="dial" tabindex="0" role="slider" aria-label="Approach selector"
+              aria-valuemin="0" aria-valuemax="4" aria-valuenow="0"
+              aria-valuetext="all" style="--a:-120deg"><i></i></span>
+        <div class="rot-opts" id="rotopts" role="radiogroup" aria-label="Approach"></div>
+      </div>
+    </section>
+
+    <section>
+      <h3>patch to · agent</h3>
+      <div class="toggles" id="agenttogs"></div>
+    </section>
+
+    <section>
+      <h3>trust · drawer</h3>
+      <div class="toggles" id="trusttogs"></div>
+      <div class="toggles" style="margin-top:9px">
+        <button class="tog" id="legendtog" type="button" aria-pressed="false">
+          <span class="body"><span class="lamp"></span></span>
+          <span class="txt">legend<span class="sub">print full event names</span></span>
+        </button>
+      </div>
+    </section>
+
+    <section style="grid-column:span 2;min-width:0">
+      <h3>tags · patch bay</h3>
+      <div class="jacks" id="jacks"></div>
+    </section>
+
+    <section>
+      <h3>sort · slide</h3>
+      <div class="slide" id="sortslide" role="radiogroup" aria-label="Sort order"></div>
+    </section>
+
+    <div class="tally" id="tally"></div>
+    <div class="tally" style="border-top:0;padding-top:0">
+      <span>Lamps under each footswitch: <b>green</b> native · <b>amber</b> fallback chain only · <b>grey</b> unreachable. Order is C X U.</span>
+      <button class="bypass" id="bypass" type="button">bypass all</button>
+    </div>
+  </div>
+
+  <main id="wall" class="wall" aria-label="Wall of pedals"></main>
+
+  <nav class="pager" id="pager" aria-label="Shelves">
+    <button class="pagebtn" type="button" data-prev>
+      <span class="stomp" aria-hidden="true"></span>prev shelf
+    </button>
+    <span class="shelfled" aria-hidden="true"></span>
+    <span class="shelfcap"></span>
+    <button class="pagebtn" type="button" data-next>
+      <span class="stomp" aria-hidden="true"></span>next shelf
+    </button>
+  </nav>
+
+  <footer class="notes">
+    <p><b>What this is.</b> Tambre is an open registry of sound packs that bind to AI coding
+    agent lifecycle events. Publish once; the pack works on Claude Code, Codex CLI and Cursor.
+    Read-only surface: no login, no account, no dashboard. Publishing happens through the CLI
+    with a keypair.</p>
+    <p><b>Coverage counts direct native support only.</b> Fallback chains
+    (<code>permission.request → notification → turn.end</code>) exist and are honoured by the
+    adapters, but counting them makes every pack read 16/16 everywhere and the number stops
+    meaning anything. Fallback-only reachability is the amber lamp.</p>
+    <p><b>Gain and throttle.</b> Role defaults are baked into the runtime, not left to pack
+    authors: boundary 1.0, cue 0.9, churn 0.2; churn throttles at 120 ms, everything else at 0.
+    Polyphony is capped at 6, oldest dropped. Hover preview has its own 100 ms throttle so
+    dragging across a bank does not machine-gun. Every rendered sound passes the mandatory
+    limiter — ×0.9×volume, tanh(x×1.25)×0.8, trailing trim, 4 ms fade — so nothing here
+    exceeds −1 dBFS.</p>
+    <p><b>Enclosure size is data.</b> A pedal is as big as the number of hooks it binds.
+    Brass Tacks binds all fourteen it can; Dead Room binds two.</p>
+  </footer>
+</div>
+
+<script>
+/* ===========================================================
+   sdsl/1 renderer — six generators, RBJ band-pass, seeded PRNG,
+   mandatory master chain. Sample rate 44100, mono.
+   =========================================================== */
+const SR = 44100;
+
+function fnv1a(s){let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193)>>>0;}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* RBJ cookbook band-pass, constant peak gain, normalised by a0 */
+function bpCoeffs(f0,Q,sr){
+  f0=Math.max(20,Math.min(f0,sr*0.45));
+  const w0=2*Math.PI*f0/sr, al=Math.sin(w0)/(2*Math.max(0.05,Q)), c=Math.cos(w0);
+  const b0=al,b1=0,b2=-al,a0=1+al,a1=-2*c,a2=1-al;
+  return [b0/a0,b1/a0,b2/a0,a1/a0,a2/a0];
+}
+function biquad(x,co){
+  const [b0,b1,b2,a1,a2]=co;let x1=0,x2=0,y1=0,y2=0;
+  const out=new Float32Array(x.length);
+  for(let i=0;i<x.length;i++){
+    const xi=x[i], y=b0*xi+b1*x1+b2*x2-a1*y1-a2*y2;
+    out[i]=y;x2=x1;x1=xi;y2=y1;y1=y;
+  }
+  return out;
+}
+
+function gTap(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.24)*SR));
+  const exc=new Float32Array(n);
+  for(let i=0;i<n;i++){const t=i/SR;exc[i]=(rng()*2-1)*Math.exp(-t/0.0016);}
+  const body=biquad(exc,bpCoeffs(p.f||400,p.q||3.2,SR));
+  const out=new Float32Array(n), dec=p.dec||0.04;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    let v=body[i]*Math.exp(-t/dec)*3.2;
+    if(p.thump) v+=Math.sin(2*Math.PI*(p.thumpf||70)*t)*p.thump*Math.exp(-t/(p.thumpdec||0.06));
+    if(p.bright) v+=(rng()*2-1)*p.bright*Math.exp(-t/0.005);
+    out[i]=v;
+  }
+  return out;
+}
+
+function gModal(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.6)*SR));
+  const out=new Float32Array(n);
+  const parts=p.partials||[[1,1,1]], dec=p.dec||0.35, f0=p.f0||440;
+  for(const pt of parts){
+    const ratio=pt[0], amp=pt[1], dm=pt[2];
+    const f=f0*ratio, d=dec*(dm||1), ph=rng()*0.4;
+    for(let i=0;i<n;i++){
+      const t=i/SR;
+      out[i]+=Math.sin(2*Math.PI*f*t+ph)*amp*Math.exp(-t/d);
+    }
+  }
+  if(p.hit){
+    const hn=Math.round(0.004*SR);
+    for(let i=0;i<Math.min(n,hn);i++) out[i]+=(rng()*2-1)*p.hit*(1-i/hn);
+  }
+  let mx=0;for(let i=0;i<n;i++)mx=Math.max(mx,Math.abs(out[i]));
+  if(mx>0)for(let i=0;i<n;i++)out[i]/=mx;
+  return out;
+}
+
+function gPluck(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.5)*SR));
+  const f0=p.f0||220, L=Math.max(2,Math.round(SR/f0));
+  const buf=new Float32Array(L);
+  const bright=p.bright!==undefined?p.bright:0.5;
+  for(let i=0;i<L;i++)buf[i]=rng()*2-1;
+  for(let k=0;k<Math.round((1-bright)*6);k++){
+    let prev=buf[L-1];
+    for(let i=0;i<L;i++){const c=buf[i];buf[i]=(c+prev)*0.5;prev=c;}
+  }
+  const damp=p.damp!==undefined?p.damp:0.996;
+  const out=new Float32Array(n);
+  let idx=0,prev=0;
+  for(let i=0;i<n;i++){
+    const cur=buf[idx];
+    buf[idx]=(cur+prev)*0.5*damp;
+    out[i]=cur;prev=cur;idx=(idx+1)%L;
+  }
+  for(let i=0;i<n;i++){const t=i/SR;out[i]*=Math.min(1,t/0.002);}
+  return out;
+}
+
+function gTone(p,rng){
+  const n=Math.max(1,Math.round((p.dur||1.0)*SR));
+  const out=new Float32Array(n);
+  const parts=p.partials||[[1,1]], f0=p.f0||220;
+  const atk=p.atk||0.05, rel=p.rel||0.3;
+  const vib=p.vib||0, vibr=p.vibrate||5, drift=p.drift||0;
+  const dph=rng()*Math.PI*2;
+  for(const pt of parts){
+    const ratio=pt[0], amp=pt[1];
+    let ph=rng()*Math.PI*2;
+    for(let i=0;i<n;i++){
+      const t=i/SR;
+      const dv=drift?Math.sin(2*Math.PI*0.13*t+dph)*drift:0;
+      const f=f0*ratio*(1+dv)*(1+(vib?Math.sin(2*Math.PI*vibr*t)*vib:0));
+      ph+=2*Math.PI*f/SR;
+      out[i]+=Math.sin(ph)*amp;
+    }
+  }
+  for(let i=0;i<n;i++){
+    const t=i/SR, tl=(n-i)/SR;
+    out[i]*=Math.min(1,t/atk)*Math.min(1,tl/rel);
+  }
+  let mx=0;for(let i=0;i<n;i++)mx=Math.max(mx,Math.abs(out[i]));
+  if(mx>0)for(let i=0;i<n;i++)out[i]/=mx;
+  return out;
+}
+
+function gBlip(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.16)*SR));
+  const out=new Float32Array(n);
+  const f0=p.f0||440,f1=p.f1||880,wave=p.wave||"sine",dec=p.dec||(p.dur||0.16)*0.5;
+  let ph=rng()*0.001;
+  for(let i=0;i<n;i++){
+    const t=i/SR, u=i/n;
+    const f=f0*Math.pow(Math.max(1e-6,f1/f0),u);
+    ph+=2*Math.PI*f/SR;
+    const x=ph%(2*Math.PI);
+    let v;
+    if(wave==="square")     v = x<Math.PI?1:-1;
+    else if(wave==="saw")   v = x/Math.PI-1;
+    else if(wave==="tri")   v = x<Math.PI?(x/Math.PI*2-1):(3-x/Math.PI*2);
+    else                    v = Math.sin(x);
+    out[i]=v*Math.exp(-t/dec);
+  }
+  return out;
+}
+
+function gNoise(p,rng){
+  const n=Math.max(1,Math.round((p.dur||0.2)*SR));
+  const raw=new Float32Array(n);
+  for(let i=0;i<n;i++)raw[i]=rng()*2-1;
+  const lo=p.lo||300, hi=p.hi||3000;
+  const ctr=Math.sqrt(Math.max(20,lo)*Math.max(40,hi));
+  const Q=Math.max(0.35,ctr/Math.max(1,(hi-lo)));
+  const out=biquad(raw,bpCoeffs(ctr,Q,SR));
+  const atk=p.atk||0.002, dec=p.dec||(p.dur||0.2)*0.4, curve=p.curve||1;
+  for(let i=0;i<n;i++){
+    const t=i/SR;
+    out[i]*=Math.min(1,t/atk)*Math.pow(Math.exp(-t/dec),curve)*2.4;
+  }
+  return out;
+}
+
+const GENS={tap:gTap,modal:gModal,pluck:gPluck,tone:gTone,blip:gBlip,noise:gNoise};
+
+/* MANDATORY master chain — loudness is a safety issue (§13).
+   x0.9 x volume -> tanh(x*1.25)*0.8 -> trim below 1.26e-4 -> 4 ms fade-out.
+   Hard ceiling is 0.8 => -1.94 dBFS, comfortably under -1 dBFS. */
+function masterChain(mix, volume){
+  const vol = volume===undefined ? 1 : volume;
+  const n = mix.length;
+  for(let i=0;i<n;i++){
+    const v = mix[i]*0.9*vol;
+    mix[i] = Math.tanh(v*1.25)*0.8;
+  }
+  let last=n-1;
+  while(last>0 && Math.abs(mix[last])<1.26e-4) last--;
+  const out = mix.slice(0, Math.max(1,last+1));
+  const fade = Math.min(out.length, Math.round(0.004*SR));
+  for(let i=0;i<fade;i++) out[out.length-fade+i] *= 1 - i/fade;
+  return out;
+}
+
+/* Render one sdsl document. seed = "<pkg>@<ver>/<soundName>" (FNV-1a + mulberry32). */
+function renderSdsl(doc, seedStr, volume){
+  const rng = mulberry32(fnv1a(seedStr));
+  const evs = doc.events || [];
+  let tail = 0;
+  for(const e of evs) tail = Math.max(tail, (e.t||0) + ((e.p && e.p.dur) || 0.5));
+  const n = Math.max(1, Math.round((tail+0.05)*SR));
+  const mix = new Float32Array(n);
+  for(const e of evs){
+    const gen = GENS[e.g];
+    if(!gen) continue;
+    const buf = gen(e.p||{}, rng);
+    const off = Math.round((e.t||0)*SR);
+    const g = e.gain!==undefined ? e.gain : 1;
+    for(let i=0;i<buf.length;i++){
+      const j = off+i; if(j>=n) break;
+      mix[j] += buf[i]*g;
+    }
+  }
+  return masterChain(mix, volume);
+}
+
+function peaksFrom(buf, bins){
+  const out = new Array(bins).fill(0);
+  const step = buf.length/bins;
+  for(let bI=0;bI<bins;bI++){
+    let mx=0;
+    const s=Math.floor(bI*step), e=Math.min(buf.length, Math.max(s+1, Math.floor((bI+1)*step)));
+    for(let i=s;i<e;i++){const a=Math.abs(buf[i]); if(a>mx) mx=a;}
+    out[bI]=mx;
+  }
+  return out;
+}
+
+
+/* ===========================================================
+   TAMBRE — variant 07 "Pedalboard"  ·  PACK DATA
+   This file is inlined into index.html. Kept separate only
+   during authoring; the shipped artifact is self-contained.
+   =========================================================== */
+
+const ROLE = {
+  'session.start':'boundary','session.end':'boundary','prompt.submit':'boundary',
+  'turn.fail':'boundary','compact.pre':'boundary','compact.post':'boundary',
+  'turn.end':'cue','permission.request':'cue','notification':'cue',
+  'tool.pre':'churn','tool.post':'churn','tool.fail':'churn',
+  'permission.denied':'churn','subagent.start':'churn','subagent.end':'churn',
+  'file.edit':'churn'
+};
+/* c = Claude Code, x = Codex CLI, u = Cursor. DIRECT native support only. */
+const SUPPORT = {
+  'session.start':'cxu','session.end':'cxu','prompt.submit':'cxu','turn.end':'cxu',
+  'turn.fail':'c','tool.pre':'cxu','tool.post':'cxu','tool.fail':'cxu',
+  'permission.request':'cx','permission.denied':'c','notification':'c',
+  'subagent.start':'cxu','subagent.end':'cxu','compact.pre':'cxu',
+  'compact.post':'cx','file.edit':'u'
+};
+const FALLBACK = {
+  'permission.request':['notification','turn.end'],
+  'permission.denied':['notification','turn.end'],
+  'notification':['turn.end'],
+  'turn.fail':['turn.end'],
+  'compact.post':['compact.pre'],
+  'file.edit':['tool.post'],
+  'subagent.start':['tool.pre']
+};
+const ROLE_GAIN     = { boundary:1.0, cue:0.9, churn:0.2 };
+const ROLE_THROTTLE = { boundary:0,   cue:0,   churn:120 };
+const ABBR = {
+  'session.start':'SESS·START','session.end':'SESS·END','prompt.submit':'PROMPT',
+  'turn.end':'TURN·END','turn.fail':'TURN·FAIL','tool.pre':'TOOL·PRE',
+  'tool.post':'TOOL·POST','tool.fail':'TOOL·FAIL','permission.request':'PERM·REQ',
+  'permission.denied':'PERM·DENY','notification':'NOTIFY','subagent.start':'SUB·START',
+  'subagent.end':'SUB·END','compact.pre':'CMPCT·PRE','compact.post':'CMPCT·POST',
+  'file.edit':'FILE·EDIT'
+};
+const ALL_TAGS = ['dry','quiet','warm','bright','metallic','wooden','glassy',
+                  'ambient','percussive','paper','low','mechanical'];
+
+/* ---------- sdsl authoring helpers (produce plain data) ---------- */
+const _e = g => (t,gain,p) => ({t,g,gain,p});
+const tap=_e('tap'), modal=_e('modal'), pluck=_e('pluck'),
+      tone=_e('tone'), blip=_e('blip'), noise=_e('noise');
+const sd = (...events) => ({kind:'sdsl', events});
+
+/* b(event, sound, gain?, throttle?) — gain/throttle default from role */
+function b(event, sound, gain, throttle){
+  const r = ROLE[event];
+  return { event, sound,
+           gain: gain===undefined ? ROLE_GAIN[r] : gain,
+           throttle: throttle===undefined ? ROLE_THROTTLE[r] : throttle,
+           role: r,
+           fallback: FALLBACK[event] || [] };
+}
+
+const PACKS = [
+{ name:'@loamworks/blackstrap', version:'2.1.0', title:'Blackstrap',
+  approach:'tactile', trust:'curated', finish:'oxblood', published:'2026-05-14',
+  installs:14820, plays:298400, volume:0.8,
+  tags:['tactile','dry','low','quiet'],
+  desc:'One thumb on a heavy denim seam. Weight and count carry the meaning; nothing is pitched.',
+  sounds:{
+    thumb:  sd(tap(0,0.90,{f:210,q:2.4,dec:0.050,dur:0.26,thump:0.42,thumpf:64,thumpdec:0.07,bright:0.06})),
+    nail:   sd(tap(0,0.85,{f:640,q:4.0,dec:0.028,dur:0.18,bright:0.14})),
+    double: sd(tap(0,0.80,{f:300,q:3.0,dec:0.040,dur:0.22,thump:0.30,thumpf:70}),
+               tap(0.085,1.0,{f:360,q:3.0,dec:0.040,dur:0.22,thump:0.30,thumpf:76})),
+    drop:   sd(noise(0,0.90,{lo:120,hi:900,dur:0.30,atk:0.001,dec:0.09,curve:1.4}))
+  },
+  bindings:[ b('session.start','double'), b('session.end','thumb'),
+             b('prompt.submit','nail'), b('turn.end','double'),
+             b('tool.pre','nail'), b('tool.post','thumb',0.16) ] },
+
+{ name:'@ashgrove/tinderbox', version:'1.4.2', title:'Tinderbox',
+  approach:'jingle', trust:'attested', finish:'tangerine', published:'2026-06-02',
+  installs:9310, plays:151200, volume:0.75,
+  tags:['bright','metallic','percussive'],
+  desc:'Struck-match transients into a small bell. Loud enough to find across a room.',
+  sounds:{
+    spark: sd(blip(0,0.90,{f0:900,f1:2400,dur:0.09,wave:'square',dec:0.035})),
+    ding:  sd(modal(0,0.95,{f0:1180,partials:[[1,1,1],[2.76,0.5,0.6],[5.4,0.24,0.35]],dec:0.50,dur:0.70,hit:0.30})),
+    flare: sd(blip(0,0.80,{f0:420,f1:1800,dur:0.22,wave:'tri',dec:0.10}),
+              modal(0.12,0.60,{f0:1560,partials:[[1,1,1],[2.4,0.4,0.5]],dec:0.30,dur:0.40}))
+  },
+  bindings:[ b('session.start','flare'), b('turn.end','ding'),
+             b('prompt.submit','spark'), b('tool.pre','spark'),
+             b('permission.request','ding') ] },
+
+{ name:'@meadowline/long-grass', version:'0.9.1', title:'Long Grass',
+  approach:'bed', trust:'attested', finish:'olive', published:'2026-04-21',
+  installs:4120, plays:62800, volume:0.7,
+  tags:['ambient','warm','quiet','low'],
+  desc:'Two slow swells. Nothing announces itself; the room just changes weight.',
+  sounds:{
+    swell: sd(tone(0,0.90,{f0:110,partials:[[1,1],[2,0.5],[3,0.28],[4.02,0.14]],dur:1.40,atk:0.35,rel:0.60,drift:0.004})),
+    sigh:  sd(noise(0,0.80,{lo:200,hi:2400,dur:0.90,atk:0.18,dec:0.40,curve:0.8}))
+  },
+  bindings:[ b('session.start','swell'), b('session.end','sigh'), b('turn.end','swell') ] },
+
+{ name:'@quietco/hushpuppy', version:'3.0.0', title:'Hushpuppy',
+  approach:'tactile', trust:'curated', finish:'cream', published:'2026-07-11',
+  installs:22470, plays:511300, volume:0.72,
+  tags:['quiet','wooden','dry','tactile'],
+  desc:'A muted pack for shared offices. Everything sits under conversation level.',
+  sounds:{
+    pat:    sd(tap(0,0.90,{f:180,q:1.8,dec:0.055,dur:0.30,thump:0.50,thumpf:58,thumpdec:0.075})),
+    tick:   sd(tap(0,0.85,{f:900,q:6.0,dec:0.014,dur:0.10})),
+    brush:  sd(noise(0,0.85,{lo:900,hi:5200,dur:0.16,atk:0.003,dec:0.05,curve:1.2})),
+    wood:   sd(modal(0,0.95,{f0:520,partials:[[1,1,1],[1.94,0.42,0.7],[3.1,0.20,0.4]],dec:0.16,dur:0.30,hit:0.40})),
+    hush:   sd(noise(0,0.80,{lo:120,hi:700,dur:0.50,atk:0.06,dec:0.22,curve:0.9}))
+  },
+  bindings:[ b('session.start','wood'), b('session.end','hush'), b('prompt.submit','pat'),
+             b('turn.end','wood'), b('turn.fail','pat'), b('tool.pre','tick'),
+             b('tool.post','brush',0.18), b('notification','wood') ] },
+
+{ name:'@ferrous/brass-tacks', version:'4.2.1', title:'Brass Tacks',
+  approach:'jingle', trust:'curated', finish:'copper', published:'2026-07-29',
+  installs:31640, plays:1284000, volume:0.7,
+  tags:['metallic','bright','percussive','mechanical'],
+  desc:'Every hook the taxonomy has, bound. Absurd, complete, and genuinely useful once throttled.',
+  sounds:{
+    tack:   sd(tap(0,0.85,{f:1400,q:7.0,dec:0.012,dur:0.09,bright:0.20})),
+    bell:   sd(modal(0,0.95,{f0:880,partials:[[1,1,1],[2.4,0.6,0.55],[4.1,0.3,0.35],[6.8,0.14,0.22]],dec:0.70,dur:1.00,hit:0.35})),
+    coin:   sd(modal(0,0.90,{f0:2100,partials:[[1,1,1],[1.7,0.55,0.6],[3.3,0.3,0.4]],dec:0.28,dur:0.45,hit:0.50})),
+    riser:  sd(blip(0,0.85,{f0:300,f1:1900,dur:0.20,wave:'saw',dec:0.09})),
+    faller: sd(blip(0,0.85,{f0:1700,f1:280,dur:0.24,wave:'sine',dec:0.11})),
+    sizzle: sd(noise(0,0.85,{lo:2200,hi:9000,dur:0.14,atk:0.002,dec:0.045,curve:1.6}))
+  },
+  bindings:[ b('session.start','riser'), b('session.end','faller'), b('prompt.submit','tack'),
+             b('turn.end','bell'), b('turn.fail','faller'), b('tool.pre','tack'),
+             b('tool.post','sizzle',0.18), b('tool.fail','coin',0.22),
+             b('permission.request','bell'), b('permission.denied','faller'),
+             b('notification','coin'), b('subagent.start','tack'),
+             b('subagent.end','coin'), b('compact.pre','riser') ] },
+
+{ name:'@papermill/vellum', version:'1.0.3', title:'Vellum',
+  approach:'tactile', trust:'attested', finish:'sand', published:'2026-03-08',
+  installs:6890, plays:98700, volume:0.78,
+  tags:['paper','dry','quiet'],
+  desc:'Sheet stock handled slowly. Band-passed noise only — no pitch anywhere in the pack.',
+  sounds:{
+    leaf:  sd(noise(0,0.90,{lo:1400,hi:6800,dur:0.13,atk:0.002,dec:0.04,curve:1.5})),
+    fold:  sd(noise(0,0.85,{lo:400,hi:2600,dur:0.22,atk:0.010,dec:0.08,curve:1.1})),
+    thumb: sd(tap(0,0.85,{f:260,q:2.2,dec:0.050,dur:0.26,thump:0.36,thumpf:66}))
+  },
+  bindings:[ b('session.start','fold'), b('turn.end','fold'),
+             b('prompt.submit','leaf'), b('tool.pre','leaf') ] },
+
+{ name:'@nocturne/deep-field', version:'2.0.0', title:'Deep Field',
+  approach:'bed', trust:'attested', finish:'midnight', published:'2026-06-19',
+  installs:11240, plays:203900, volume:0.66,
+  tags:['ambient','low','warm'],
+  desc:'Two sustained beds an octave apart. Built for long sessions where a tick would grate.',
+  sounds:{
+    drone: sd(tone(0,0.90,{f0:74,partials:[[1,1],[1.5,0.30],[2,0.42],[3,0.20],[4.5,0.08]],dur:2.00,atk:0.50,rel:0.90,drift:0.006,vib:0.002,vibrate:0.7})),
+    pad:   sd(tone(0,0.85,{f0:196,partials:[[1,0.8],[2,0.5],[2.99,0.3],[5,0.12]],dur:1.20,atk:0.25,rel:0.50,vib:0.004,vibrate:4.2}))
+  },
+  bindings:[ b('session.start','drone'), b('session.end','drone'),
+             b('prompt.submit','pad'), b('turn.end','pad'), b('compact.pre','drone') ] },
+
+{ name:'@clockwise/ratchet-pawl', version:'1.8.0', title:'Ratchet & Pawl',
+  approach:'hybrid', trust:'attested', finish:'hammer', published:'2026-07-04',
+  installs:15980, plays:412600, volume:0.76,
+  tags:['mechanical','metallic','percussive','dry'],
+  desc:'A geared feel: detents for churn, a sprung string for the turn, wind for the close.',
+  sounds:{
+    click:  sd(tap(0,0.85,{f:1100,q:8.0,dec:0.010,dur:0.07,bright:0.25})),
+    pawl:   sd(tap(0,0.85,{f:520,q:5.0,dec:0.020,dur:0.14,thump:0.20,thumpf:110})),
+    spring: sd(pluck(0,0.90,{f0:330,dur:0.40,damp:0.988,bright:0.7})),
+    gear:   sd(modal(0,0.90,{f0:410,partials:[[1,1,1],[2.1,0.5,0.6],[3.6,0.28,0.4],[5.9,0.12,0.25]],dec:0.22,dur:0.40,hit:0.45})),
+    wind:   sd(noise(0,0.80,{lo:300,hi:3400,dur:0.35,atk:0.020,dec:0.13,curve:1.0}))
+  },
+  bindings:[ b('session.start','gear'), b('session.end','wind'), b('prompt.submit','click'),
+             b('turn.end','spring'), b('turn.fail','pawl'), b('tool.pre','click'),
+             b('tool.post','pawl',0.18), b('tool.fail','gear',0.24),
+             b('subagent.end','spring') ] },
+
+{ name:'@verbose/considerate-overdrive', version:'0.4.0',
+  title:'The Extremely Considerate Overdrive That Only Speaks When Spoken To',
+  approach:'hybrid', trust:'attested', finish:'grape', published:'2026-07-22',
+  installs:2380, plays:41100, volume:0.7,
+  tags:['quiet','warm','ambient'],
+  desc:'A deliberately over-long name, kept to prove the silkscreen wraps instead of clipping.',
+  sounds:{
+    ahem:       sd(noise(0,0.80,{lo:220,hi:1500,dur:0.28,atk:0.030,dec:0.10,curve:1.0})),
+    politebell: sd(modal(0,0.90,{f0:1320,partials:[[1,1,1],[2.02,0.4,0.6],[3.9,0.18,0.3]],dec:0.38,dur:0.60,hit:0.22})),
+    nudge:      sd(tap(0,0.85,{f:340,q:2.8,dec:0.045,dur:0.24,thump:0.30,thumpf:72})),
+    murmur:     sd(tone(0,0.85,{f0:150,partials:[[1,0.9],[2,0.4],[3.02,0.2]],dur:0.90,atk:0.20,rel:0.40,drift:0.010}))
+  },
+  bindings:[ b('session.start','murmur'), b('session.end','murmur'), b('prompt.submit','nudge'),
+             b('turn.end','politebell'), b('permission.request','politebell',1.0),
+             b('notification','politebell'), b('tool.post','ahem',0.16) ] },
+
+{ name:'@coinpurse/sixpence', version:'2.3.0', title:'Sixpence',
+  approach:'jingle', trust:'curated', finish:'rose', published:'2026-05-30',
+  installs:18760, plays:604200, volume:0.72,
+  tags:['metallic','bright','glassy'],
+  desc:'Small coins on a hard surface. The turn-end settles instead of ringing on.',
+  sounds:{
+    chink:  sd(modal(0,0.90,{f0:2600,partials:[[1,1,1],[1.63,0.5,0.55],[2.9,0.24,0.35]],dec:0.20,dur:0.35,hit:0.55})),
+    purse:  sd(noise(0,0.85,{lo:900,hi:5800,dur:0.18,atk:0.002,dec:0.06,curve:1.3})),
+    toss:   sd(blip(0,0.85,{f0:700,f1:2600,dur:0.12,wave:'tri',dec:0.05})),
+    settle: sd(modal(0,0.90,{f0:1400,partials:[[1,1,1],[2.2,0.45,0.5]],dec:0.30,dur:0.50,hit:0.30}),
+               tap(0.06,0.50,{f:220,q:2.0,dec:0.04,dur:0.20,thump:0.40,thumpf:60}))
+  },
+  bindings:[ b('session.start','toss'), b('turn.end','settle'), b('prompt.submit','chink'),
+             b('tool.pre','chink'), b('tool.post','purse',0.16),
+             b('permission.request','settle') ] },
+
+{ name:'@edgewise/keystroke', version:'1.1.0', title:'Keystroke',
+  approach:'hybrid', trust:'attested', finish:'seafoam', published:'2026-08-01',
+  installs:7420, plays:188300, volume:0.74,
+  tags:['mechanical','dry','percussive'],
+  desc:'Binds file.edit, which only Cursor fires — so this is the one pedal that scores higher on Cursor than on Claude.',
+  sounds:{
+    key:      sd(tap(0,0.85,{f:820,q:5.5,dec:0.016,dur:0.10,bright:0.18})),
+    space:    sd(tap(0,0.85,{f:300,q:2.6,dec:0.030,dur:0.16,thump:0.34,thumpf:80})),
+    carriage: sd(noise(0,0.85,{lo:600,hi:4200,dur:0.20,atk:0.003,dec:0.07,curve:1.2}))
+  },
+  bindings:[ b('session.start','carriage'), b('turn.end','space'), b('tool.pre','key'),
+             b('tool.post','key',0.16), b('file.edit','key') ] },
+
+{ name:'@riverbed/wet-stone', version:'0.2.0', title:'Wet Stone',
+  approach:'bed', trust:'unverified', finish:'teal', published:'2026-08-05',
+  installs:210, plays:2900, volume:0.7,
+  tags:['ambient','low','quiet'],
+  desc:'A pooled drone with one falling drop. Unverified scope — hidden from the wall by default.',
+  sounds:{
+    pool: sd(tone(0,0.90,{f0:98,partials:[[1,1],[2,0.42],[3.01,0.22],[4,0.10]],dur:1.60,atk:0.40,rel:0.70,drift:0.005})),
+    drip: sd(blip(0,0.85,{f0:1500,f1:520,dur:0.16,wave:'sine',dec:0.06}))
+  },
+  bindings:[ b('session.start','pool'), b('session.end','pool'),
+             b('turn.end','drip'), b('tool.post','drip',0.16) ] },
+
+{ name:'@coilcraft/ferrite', version:'3.1.2', title:'Ferrite',
+  approach:'tactile', trust:'attested', finish:'charcoal', published:'2026-06-27',
+  installs:13050, plays:377800, volume:0.78,
+  tags:['dry','metallic','low','mechanical'],
+  desc:'Wound-core thuds and pin taps. Ten hooks bound, all of them short.',
+  sounds:{
+    core:   sd(tap(0,0.90,{f:150,q:1.6,dec:0.060,dur:0.32,thump:0.55,thumpf:52,thumpdec:0.09})),
+    pin:    sd(tap(0,0.85,{f:1250,q:7.5,dec:0.011,dur:0.08,bright:0.22})),
+    wire:   sd(pluck(0,0.90,{f0:520,dur:0.30,damp:0.984,bright:0.4})),
+    coil:   sd(modal(0,0.90,{f0:300,partials:[[1,1,1],[2.8,0.4,0.5],[4.9,0.2,0.3]],dec:0.20,dur:0.38,hit:0.40})),
+    static: sd(noise(0,0.85,{lo:1800,hi:8200,dur:0.12,atk:0.002,dec:0.035,curve:1.7}))
+  },
+  bindings:[ b('session.start','coil'), b('session.end','core'), b('prompt.submit','pin'),
+             b('turn.end','wire'), b('turn.fail','core'), b('tool.pre','pin'),
+             b('tool.post','static',0.16), b('tool.fail','coil',0.22),
+             b('subagent.start','pin'), b('subagent.end','wire') ] },
+
+{ name:'@harbourline/bell-buoy', version:'1.6.0', title:'Bell Buoy',
+  approach:'jingle', trust:'curated', finish:'sky', published:'2026-05-02',
+  installs:16330, plays:498100, volume:0.7,
+  tags:['metallic','ambient','warm'],
+  desc:'A long channel-marker bell over a low swell. The turn-end rings for a full second.',
+  sounds:{
+    buoy:    sd(modal(0,0.95,{f0:520,partials:[[1,1,1],[2.4,0.62,0.6],[3.9,0.3,0.4],[5.7,0.15,0.25]],dec:0.90,dur:1.30,hit:0.30})),
+    clapper: sd(tap(0,0.85,{f:700,q:4.5,dec:0.020,dur:0.14,bright:0.16})),
+    swell:   sd(tone(0,0.85,{f0:130,partials:[[1,0.9],[2,0.4],[3,0.18]],dur:1.00,atk:0.30,rel:0.50,drift:0.008})),
+    gull:    sd(blip(0,0.85,{f0:1900,f1:900,dur:0.20,wave:'tri',dec:0.08}))
+  },
+  bindings:[ b('session.start','swell'), b('session.end','swell'), b('turn.end','buoy'),
+             b('prompt.submit','clapper'), b('notification','gull'), b('tool.pre','clapper') ] },
+
+{ name:'@ashgrove/dry-kindling', version:'2.0.4', title:'Dry Kindling',
+  approach:'tactile', trust:'attested', finish:'mustard', published:'2026-04-16',
+  installs:8940, plays:229500, volume:0.76,
+  tags:['dry','wooden','percussive','bright'],
+  desc:'Snapping twigs. Short decays throughout so a busy tool loop never smears.',
+  sounds:{
+    snap:    sd(tap(0,0.85,{f:980,q:6.5,dec:0.013,dur:0.09,bright:0.24})),
+    crack:   sd(tap(0,0.85,{f:420,q:3.4,dec:0.030,dur:0.18,thump:0.28,thumpf:88,bright:0.10})),
+    crumble: sd(noise(0,0.85,{lo:1200,hi:7000,dur:0.20,atk:0.002,dec:0.06,curve:1.5})),
+    log:     sd(modal(0,0.90,{f0:180,partials:[[1,1,1],[2.3,0.4,0.6],[4.1,0.16,0.3]],dec:0.18,dur:0.34,hit:0.50}))
+  },
+  bindings:[ b('session.start','log'), b('session.end','log'), b('prompt.submit','snap'),
+             b('turn.end','crack'), b('tool.pre','snap'), b('tool.post','crumble',0.16),
+             b('tool.fail','log',0.24) ] },
+
+{ name:'@depot/nightshift', version:'0.5.1', title:'Nightshift',
+  approach:'bed', trust:'unverified', finish:'midnight', published:'2026-07-31',
+  installs:340, plays:5100, volume:0.62,
+  tags:['ambient','low','quiet','warm'],
+  desc:'Mains hum and a desk lamp. Three hooks, two sounds, nothing above 250 Hz.',
+  sounds:{
+    hum:  sd(tone(0,0.90,{f0:60,partials:[[1,1],[2,0.5],[3,0.25],[5,0.08]],dur:2.20,atk:0.60,rel:1.00,drift:0.004})),
+    lamp: sd(tone(0,0.85,{f0:240,partials:[[1,0.8],[2.01,0.3],[4,0.10]],dur:0.80,atk:0.15,rel:0.40,vib:0.003,vibrate:6}))
+  },
+  bindings:[ b('session.start','hum'), b('session.end','hum'), b('turn.end','lamp') ] },
+
+{ name:'@coinpurse/pocket-change', version:'3.4.0', title:'Pocket Change',
+  approach:'jingle', trust:'attested', finish:'copper', published:'2026-06-11',
+  installs:12480, plays:702400, volume:0.68,
+  tags:['metallic','bright','percussive','glassy'],
+  desc:'Twelve hooks of small change. Two coins per denomination so repeats do not phase-lock.',
+  sounds:{
+    nickel: sd(modal(0,0.90,{f0:2300,partials:[[1,1,1],[1.58,0.5,0.55],[2.7,0.25,0.3]],dec:0.22,dur:0.40,hit:0.50})),
+    dime:   sd(modal(0,0.90,{f0:3100,partials:[[1,1,1],[1.72,0.45,0.5]],dec:0.16,dur:0.30,hit:0.55})),
+    jangle: sd(modal(0,0.85,{f0:1800,partials:[[1,1,1],[1.9,0.5,0.6],[3.4,0.3,0.4]],dec:0.30,dur:0.50,hit:0.40}),
+               modal(0.05,0.70,{f0:2400,partials:[[1,1,1],[1.7,0.4,0.5]],dec:0.22,dur:0.40,hit:0.35})),
+    pocket: sd(noise(0,0.85,{lo:700,hi:5000,dur:0.20,atk:0.003,dec:0.07,curve:1.3})),
+    flip:   sd(blip(0,0.85,{f0:800,f1:2900,dur:0.11,wave:'square',dec:0.045})),
+    drop2:  sd(tap(0,0.85,{f:240,q:2.0,dec:0.045,dur:0.24,thump:0.42,thumpf:62}))
+  },
+  bindings:[ b('session.start','jangle'), b('session.end','pocket'), b('prompt.submit','dime'),
+             b('turn.end','jangle'), b('turn.fail','drop2'), b('tool.pre','dime'),
+             b('tool.post','nickel',0.16), b('tool.fail','drop2',0.24),
+             b('permission.request','jangle'), b('notification','flip'),
+             b('subagent.start','flip'), b('compact.post','pocket') ] },
+
+{ name:'@papermill/balsa', version:'1.2.1', title:'Balsa',
+  approach:'tactile', trust:'attested', finish:'cream', published:'2026-03-27',
+  installs:5610, plays:87400, volume:0.8,
+  tags:['wooden','dry','quiet'],
+  desc:'Light modelling wood: hollow planks, a knuckle, and sandpaper for tool churn.',
+  sounds:{
+    plank:   sd(modal(0,0.90,{f0:340,partials:[[1,1,1],[2.05,0.45,0.6],[3.3,0.2,0.35]],dec:0.14,dur:0.28,hit:0.50})),
+    sand:    sd(noise(0,0.85,{lo:1100,hi:6200,dur:0.24,atk:0.005,dec:0.08,curve:1.2})),
+    knuckle: sd(tap(0,0.85,{f:560,q:4.0,dec:0.024,dur:0.16,thump:0.20,thumpf:96}))
+  },
+  bindings:[ b('session.start','plank'), b('turn.end','plank'), b('prompt.submit','knuckle'),
+             b('tool.pre','knuckle'), b('tool.post','sand',0.16) ] },
+
+{ name:'@clockwise/thumbwheel', version:'2.2.0', title:'Thumbwheel',
+  approach:'hybrid', trust:'curated', finish:'olive', published:'2026-07-17',
+  installs:19870, plays:556900, volume:0.74,
+  tags:['mechanical','warm','metallic'],
+  desc:'Detented notches for churn, a plucked string for failure, a swept selector for boundaries.',
+  sounds:{
+    notch:  sd(tap(0,0.85,{f:1000,q:7.0,dec:0.012,dur:0.08,bright:0.20})),
+    detent: sd(tap(0,0.85,{f:460,q:4.2,dec:0.022,dur:0.15,thump:0.24,thumpf:100})),
+    string: sd(pluck(0,0.90,{f0:196,dur:0.55,damp:0.992,bright:0.6})),
+    chime:  sd(modal(0,0.90,{f0:1040,partials:[[1,1,1],[2.7,0.5,0.55],[5.1,0.22,0.3]],dec:0.45,dur:0.70,hit:0.30})),
+    sweep:  sd(blip(0,0.85,{f0:260,f1:1400,dur:0.26,wave:'saw',dec:0.12}))
+  },
+  bindings:[ b('session.start','sweep'), b('session.end','sweep'), b('prompt.submit','notch'),
+             b('turn.end','chime'), b('turn.fail','string'), b('tool.pre','notch'),
+             b('tool.post','detent',0.16), b('compact.pre','string') ] },
+
+{ name:'@meadowline/salt-marsh', version:'1.0.0', title:'Salt Marsh',
+  approach:'bed', trust:'attested', finish:'seafoam', published:'2026-05-21',
+  installs:6240, plays:104800, volume:0.7,
+  tags:['ambient','warm','quiet'],
+  desc:'Tide noise under a reed drone, with one damped pluck for tool completion.',
+  sounds:{
+    tide:  sd(noise(0,0.85,{lo:120,hi:1800,dur:1.20,atk:0.30,dec:0.50,curve:0.7})),
+    reed:  sd(tone(0,0.85,{f0:174,partials:[[1,0.9],[2,0.45],[3,0.22],[4.02,0.10]],dur:1.10,atk:0.28,rel:0.50,drift:0.007})),
+    wader: sd(pluck(0,0.90,{f0:660,dur:0.28,damp:0.980,bright:0.3}))
+  },
+  bindings:[ b('session.start','reed'), b('session.end','tide'),
+             b('turn.end','reed'), b('tool.post','wader',0.16) ] },
+
+{ name:'@ferrous/snapback', version:'0.7.2', title:'Snapback',
+  approach:'tactile', trust:'unverified', finish:'tangerine', published:'2026-08-03',
+  installs:180, plays:2100, volume:0.8,
+  tags:['dry','percussive','bright'],
+  desc:'Elastic under tension. Unverified — reachable by direct link only until you flip the drawer switch.',
+  sounds:{
+    snap:    sd(tap(0,0.85,{f:1300,q:8.0,dec:0.010,dur:0.07,bright:0.28})),
+    elastic: sd(pluck(0,0.90,{f0:280,dur:0.30,damp:0.978,bright:0.8})),
+    slap:    sd(tap(0,0.90,{f:220,q:2.0,dec:0.050,dur:0.26,thump:0.50,thumpf:60})),
+    whip:    sd(blip(0,0.85,{f0:2400,f1:600,dur:0.14,wave:'saw',dec:0.05}))
+  },
+  bindings:[ b('session.start','slap'), b('prompt.submit','snap'), b('turn.end','elastic'),
+             b('turn.fail','whip'), b('tool.pre','snap'), b('tool.fail','slap',0.24) ] },
+
+{ name:'@nocturne/glass-ceiling', version:'2.5.0', title:'Glass Ceiling',
+  approach:'jingle', trust:'attested', finish:'grape', published:'2026-06-24',
+  installs:10760, plays:341200, volume:0.68,
+  tags:['glassy','bright','metallic'],
+  desc:'High struck glass with a sustaining pane underneath. Nothing below 400 Hz.',
+  sounds:{
+    crystal: sd(modal(0,0.95,{f0:1760,partials:[[1,1,1],[2.76,0.5,0.6],[5.4,0.25,0.35],[8.9,0.10,0.2]],dec:0.60,dur:0.90,hit:0.25})),
+    shard:   sd(modal(0,0.90,{f0:3400,partials:[[1,1,1],[1.9,0.4,0.5]],dec:0.14,dur:0.26,hit:0.50})),
+    rim:     sd(blip(0,0.85,{f0:1100,f1:3300,dur:0.10,wave:'sine',dec:0.04})),
+    pane:    sd(tone(0,0.85,{f0:440,partials:[[1,0.8],[2,0.3],[3,0.14],[4,0.06]],dur:0.70,atk:0.10,rel:0.35,vib:0.003,vibrate:5.5})),
+    dust:    sd(noise(0,0.85,{lo:3000,hi:11000,dur:0.10,atk:0.001,dec:0.03,curve:1.8}))
+  },
+  bindings:[ b('session.start','pane'), b('session.end','pane'), b('prompt.submit','rim'),
+             b('turn.end','crystal'), b('tool.pre','rim'), b('tool.post','dust',0.14),
+             b('tool.fail','shard',0.22), b('permission.request','crystal'),
+             b('notification','shard') ] },
+
+{ name:'@quietco/dead-room', version:'1.0.0', title:'Dead Room',
+  approach:'bed', trust:'curated', finish:'sand', published:'2026-02-19',
+  installs:9120, plays:71600, volume:0.6,
+  tags:['quiet','ambient','low'],
+  desc:'The minimum viable pack: two sounds, two hooks, and a deliberate refusal to mark tool calls.',
+  sounds:{
+    floor: sd(tone(0,0.85,{f0:88,partials:[[1,1],[2,0.3],[3,0.12]],dur:1.50,atk:0.45,rel:0.80,drift:0.003})),
+    close: sd(noise(0,0.80,{lo:150,hi:900,dur:0.40,atk:0.05,dec:0.15,curve:0.9}))
+  },
+  bindings:[ b('turn.end','floor'), b('session.end','close') ] },
+
+{ name:'@depot/tape-hiss-deluxe', version:'4.0.1', title:'Tape Hiss Deluxe',
+  approach:'hybrid', trust:'attested', finish:'rose', published:'2026-07-26',
+  installs:21430, plays:869700, volume:0.7,
+  tags:['warm','ambient','mechanical','low'],
+  desc:'Transport clunks, spool drift, and a wow-modulated turn-end. Eleven hooks, six sounds.',
+  sounds:{
+    hiss:   sd(noise(0,0.85,{lo:2400,hi:12000,dur:0.50,atk:0.05,dec:0.20,curve:1.0})),
+    clunk:  sd(tap(0,0.90,{f:190,q:1.8,dec:0.055,dur:0.30,thump:0.52,thumpf:54,thumpdec:0.08})),
+    spool:  sd(tone(0,0.85,{f0:112,partials:[[1,0.9],[2,0.4],[3,0.2],[4.03,0.10]],dur:1.00,atk:0.20,rel:0.45,drift:0.012,vib:0.004,vibrate:2.2})),
+    punch:  sd(tap(0,0.85,{f:640,q:4.6,dec:0.020,dur:0.13,bright:0.14})),
+    rewind: sd(blip(0,0.85,{f0:400,f1:3200,dur:0.30,wave:'saw',dec:0.14})),
+    wow:    sd(tone(0,0.85,{f0:330,partials:[[1,0.85],[2.01,0.35],[3,0.15]],dur:0.80,atk:0.12,rel:0.40,vib:0.012,vibrate:3.4}))
+  },
+  bindings:[ b('session.start','spool'), b('session.end','spool'), b('prompt.submit','punch'),
+             b('turn.end','wow'), b('turn.fail','clunk'), b('tool.pre','punch'),
+             b('tool.post','hiss',0.14), b('tool.fail','clunk',0.24),
+             b('permission.request','wow'), b('compact.pre','rewind'),
+             b('compact.post','rewind') ] }
+];
+
+
+/* ===========================================================
+   Coverage, filtering, the wall, and the audio gate.
+   =========================================================== */
+const AGENTS = [
+  {id:'c', key:'claude-code', label:'CLAUDE CODE', short:'C'},
+  {id:'x', key:'codex',       label:'CODEX CLI',   short:'X'},
+  {id:'u', key:'cursor',      label:'CURSOR',      short:'U'}
+];
+const PER_SHELF = 8;
+const HOVER_THROTTLE = 100;   /* separate from role throttle, by design */
+const POLYPHONY = 6;
+
+/* ---------- reachability: native / fallback-only / none ---------- */
+function reach(event, ch){
+  if((SUPPORT[event]||'').indexOf(ch) >= 0) return 'native';
+  for(const f of (FALLBACK[event]||[])){
+    if((SUPPORT[f]||'').indexOf(ch) >= 0) return 'fallback';
+  }
+  return 'none';
+}
+function fallbackTarget(event, ch){
+  for(const f of (FALLBACK[event]||[])){
+    if((SUPPORT[f]||'').indexOf(ch) >= 0) return f;
+  }
+  return null;
+}
+function coverage(pack, ch){
+  let n=0;
+  for(const bd of pack.bindings) if(reach(bd.event,ch)==='native') n++;
+  return n;
+}
+function fullyNative(pack, ch){ return coverage(pack,ch) === pack.bindings.length; }
+
+/* derived fields */
+PACKS.forEach(p=>{
+  p.soundCount = Object.keys(p.sounds).length;
+  p.cov = {c:coverage(p,'c'), x:coverage(p,'x'), u:coverage(p,'u')};
+  p.hooks = p.bindings.length;
+  p.seed = fnv1a(p.name);
+});
+
+/* ---------- state ---------- */
+const state = {
+  approach:'all',
+  agents:{c:false,x:false,u:false},
+  trust:{curated:true, attested:true, unverified:false},
+  tags:new Set(),
+  sort:'newest',
+  shelf:0,
+  legend:false
+};
+
+function matches(p){
+  if(state.approach!=='all' && p.approach!==state.approach) return false;
+  if(!state.trust[p.trust]) return false;
+  for(const a of AGENTS) if(state.agents[a.id] && !fullyNative(p,a.id)) return false;
+  if(state.tags.size){
+    let hit=false;
+    for(const t of state.tags) if(p.tags.indexOf(t)>=0){hit=true;break;}
+    if(!hit) return false;
+  }
+  return true;
+}
+function sorted(list){
+  const l = list.slice();
+  if(state.sort==='installs') l.sort((a,b)=>b.installs-a.installs);
+  else if(state.sort==='plays') l.sort((a,b)=>b.plays-a.plays);
+  else l.sort((a,b)=>(a.published<b.published?1:a.published>b.published?-1:0));
+  return l;
+}
+
+/* ---------- audio ---------- */
+let ctx=null, armed=false, masterVol=0.8;
+let voices=[];
+const pcmCache=new Map();
+const abCache=new Map();
+let lastHover=0;
+const roleClock=new Map();
+
+function pcmFor(pack, soundName){
+  const key = pack.name+'@'+pack.version+'/'+soundName;
+  if(pcmCache.has(key)) return pcmCache.get(key);
+  const doc = pack.sounds[soundName];
+  const buf = renderSdsl(doc, key, pack.volume);
+  pcmCache.set(key, buf);
+  return buf;
+}
+function audioBufFor(pack, soundName){
+  const key = pack.name+'@'+pack.version+'/'+soundName;
+  if(abCache.has(key)) return abCache.get(key);
+  const pcm = pcmFor(pack, soundName);
+  const ab = ctx.createBuffer(1, pcm.length, SR);
+  ab.getChannelData(0).set(pcm);
+  abCache.set(key, ab);
+  return ab;
+}
+
+function armBoard(){
+  if(armed) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return;
+  ctx = new AC();
+  if(ctx.resume) { try{ ctx.resume(); }catch(e){} }
+  armed = true;
+}
+
+function play(pack, bd, viaHover){
+  if(!armed || !ctx) return false;
+  const now = (typeof performance!=='undefined' && performance.now) ? performance.now() : Date.now();
+  if(viaHover){
+    if(now - lastHover < HOVER_THROTTLE) return false;
+    lastHover = now;
+  }
+  const rk = pack.name+':'+bd.event;
+  const prev = roleClock.get(rk) || -1e9;
+  if(bd.throttle && now - prev < bd.throttle) return false;
+  roleClock.set(rk, now);
+
+  while(voices.length >= POLYPHONY){
+    const v = voices.shift();
+    try{ v.src.stop(); }catch(e){}
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = audioBufFor(pack, bd.sound);
+  const g = ctx.createGain();
+  g.gain.value = bd.gain * masterVol;
+  src.connect(g); g.connect(ctx.destination);
+  const rec = {src:src, at:now};
+  src.onended = ()=>{ const i=voices.indexOf(rec); if(i>=0) voices.splice(i,1); };
+  try{ src.start(); }catch(e){}
+  voices.push(rec);
+  return true;
+}
+
+/* ---------- LCD ---------- */
+const lcd = {l1:null,l2:null,l3:null};
+function lcdSet(a,b2,c){
+  if(!lcd.l1) return;
+  lcd.l1.textContent=a; lcd.l2.textContent=b2; lcd.l3.textContent=c;
+}
+function lcdIdle(){
+  if(armed) lcdSet('BOARD LIVE','Hover any footswitch to audition its hook.',
+                   'Master '+Math.round(masterVol*100)+'%  ·  polyphony 6  ·  hover throttle '+HOVER_THROTTLE+' ms');
+  else lcdSet('MAINS OFF','Stomp the red rocker to power the board.',
+              'No sound is produced before that gesture.');
+}
+function lcdBinding(pack, bd){
+  const cov = AGENTS.map(a=>{
+    const r = reach(bd.event, a.id);
+    if(r==='native') return a.short+' native';
+    if(r==='fallback') return a.short+' via '+fallbackTarget(bd.event,a.id);
+    return a.short+' unreachable';
+  }).join('   ');
+  lcdSet(bd.event,
+    pack.title+'  ·  sound "'+bd.sound+'"  ·  gain '+bd.gain.toFixed(2)+
+      '  ·  throttle '+bd.throttle+' ms  ·  role '+bd.role,
+    cov);
+}
+
+/* ---------- helpers ---------- */
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function num(n){
+  if(n>=1e6) return (n/1e6).toFixed(n>=1e7?0:1)+'M';
+  if(n>=1e3) return (n/1e3).toFixed(n>=1e4?0:1)+'k';
+  return String(n);
+}
+function widthClass(h){ return h<=3?'':(h<=6?'':(h<=9?'w2':'w3')); }
+function titleClass(t){ return t.length>44?'long':(t.length>16?'med':''); }
+function knobAngle(g){ return (-135 + g*270).toFixed(1)+'deg'; }
+
+/* ---------- pedal markup ---------- */
+function pedalHTML(p){
+  const rnd = mulberry32(p.seed);
+  const tilt = ((rnd()*2-1)*0.7).toFixed(2)+'deg';
+  const sw = p.bindings.map(bd=>{
+    const lamps = AGENTS.map(a=>{
+      const r = reach(bd.event,a.id);
+      const t = a.label+': '+(r==='native'?'native':(r==='fallback'?'via '+fallbackTarget(bd.event,a.id):'unreachable'));
+      return '<i class="'+r+'" title="'+esc(t)+'"></i>';
+    }).join('');
+    const full = bd.event+' — sound "'+bd.sound+'", gain '+bd.gain.toFixed(2)+
+                 ', throttle '+bd.throttle+' ms, role '+bd.role;
+    return '<button class="fsw" type="button" data-pack="'+esc(p.name)+'" data-event="'+esc(bd.event)+'"'+
+             ' title="'+esc(full)+'" aria-label="'+esc('Audition '+full)+'">'+
+             '<span class="stomp" aria-hidden="true"></span>'+
+             '<span class="fled" aria-hidden="true"></span>'+
+             '<span class="fname" data-abbr="'+esc(ABBR[bd.event])+'" data-full="'+esc(bd.event)+'">'+
+               esc(state.legend?bd.event:ABBR[bd.event])+'</span>'+
+             '<span class="fmeta"><i class="miniknob" style="--a:'+knobAngle(bd.gain)+'" aria-hidden="true"></i>'+
+               '<span>'+esc(bd.sound)+'</span> g'+bd.gain.toFixed(2)+'</span>'+
+             '<span class="lamps" aria-hidden="true">'+lamps+'</span>'+
+           '</button>';
+  }).join('');
+
+  const cov = AGENTS.map(a=>'<span><u>'+a.short+'</u> '+p.cov[a.id]+'/'+p.hooks+'</span>').join('');
+  const first = p.bindings.find(bd=>bd.event==='turn.end') || p.bindings[0];
+
+  return ''+
+  '<article class="pedal f-'+p.finish+' '+widthClass(p.hooks)+
+      (p.finish==='grape'||p.finish==='rose'||p.finish==='midnight'?' sparkle':'')+
+      (p.finish==='hammer'?' hammer':'')+
+      '" style="--tilt:'+tilt+'" data-pack="'+esc(p.name)+'">'+
+    '<span class="screw tl" style="--sr:'+(rnd()*180|0)+'deg"></span>'+
+    '<span class="screw tr" style="--sr:'+(rnd()*180|0)+'deg"></span>'+
+    '<span class="screw bl" style="--sr:'+(rnd()*180|0)+'deg"></span>'+
+    '<span class="screw br" style="--sr:'+(rnd()*180|0)+'deg"></span>'+
+    '<span class="statusled" data-led aria-hidden="true"></span>'+
+    '<div class="silk">'+
+      '<h2 class="'+titleClass(p.title)+'">'+esc(p.title)+'</h2>'+
+      '<span class="scope-id">'+esc(p.name)+' @ '+esc(p.version)+'</span>'+
+      '<p class="desc">'+esc(p.desc)+'</p>'+
+    '</div>'+
+    '<div class="chassis">'+
+      '<div class="scopewin"><canvas data-scope height="38"></canvas>'+
+        '<span class="cap" data-scopecap>'+esc(first.event+' · '+first.sound)+'</span></div>'+
+      '<div class="cluster">'+
+        '<span class="bigknob" style="--a:'+knobAngle(p.volume)+'" aria-hidden="true"><i></i></span>'+
+        '<span class="cap">vol '+p.volume.toFixed(2)+'</span>'+
+      '</div>'+
+    '</div>'+
+    '<div class="chips">'+
+      '<span class="chip">'+esc(p.approach)+'</span>'+
+      '<span class="chip seal '+p.trust+'">'+esc(p.trust)+'</span>'+
+      '<span class="chip">'+p.soundCount+' snd</span>'+
+      '<span class="chip">'+p.hooks+' hooks</span>'+
+    '</div>'+
+    '<div class="bank">'+
+      '<span class="bank-hd"><span>footswitches — one per bound hook</span>'+
+        '<span>hover to audition</span></span>'+ sw +
+    '</div>'+
+    '<div class="plate">'+
+      '<span class="row"><b>'+p.soundCount+' sounds</b>'+
+        '<span>'+num(p.installs)+' installs</span>'+
+        '<span>'+num(p.plays)+' plays</span>'+
+        '<span>pub '+esc(p.published)+'</span></span>'+
+      '<span class="cov">'+cov+'</span>'+
+      '<span class="tags">'+esc(p.tags.map(t=>'#'+t).join(' '))+'</span>'+
+    '</div>'+
+  '</article>';
+}
+
+/* ---------- scope drawing ---------- */
+function drawScope(cv, pcm){
+  const ctx2 = cv.getContext && cv.getContext('2d');
+  if(!ctx2) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(40, cv.clientWidth || 150), h = 38;
+  cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr);
+  if(ctx2.setTransform) ctx2.setTransform(dpr,0,0,dpr,0,0);
+  ctx2.clearRect(0,0,w,h);
+  ctx2.strokeStyle='rgba(92,196,130,.25)';
+  ctx2.beginPath(); ctx2.moveTo(0,h/2); ctx2.lineTo(w,h/2); ctx2.stroke();
+  const bins = Math.max(24, Math.floor(w/2));
+  const pk = peaksFrom(pcm, bins);
+  ctx2.fillStyle='#5cf09a';
+  for(let i=0;i<bins;i++){
+    const x = i*(w/bins), bh = Math.max(0.6, pk[i]*(h*0.92));
+    ctx2.fillRect(x, (h-bh)/2, Math.max(1,(w/bins)-0.6), bh);
+  }
+}
+
+/* ---------- render wall ---------- */
+let wall, pager;
+function render(){
+  const all = PACKS.filter(matches);
+  const list = sorted(all);
+  const shelves = Math.max(1, Math.ceil(list.length/PER_SHELF));
+  if(state.shelf >= shelves) state.shelf = shelves-1;
+  const page = list.slice(state.shelf*PER_SHELF, state.shelf*PER_SHELF+PER_SHELF);
+
+  wall.innerHTML = page.length
+    ? page.map(pedalHTML).join('')
+    : '<p class="empty">no pedals on this board — open the drawer or unpatch a tag</p>';
+
+  page.forEach(p=>{
+    const el = wall.querySelector('.pedal[data-pack="'+CSS_ESC(p.name)+'"]');
+    if(!el) return;
+    const cv = el.querySelector('[data-scope]');
+    const first = p.bindings.find(bd=>bd.event==='turn.end') || p.bindings[0];
+    if(cv) drawScope(cv, pcmFor(p, first.sound));
+  });
+
+  /* tally */
+  const hiddenUnverified = PACKS.filter(p=>p.trust==='unverified').length;
+  const t = document.getElementById('tally');
+  t.innerHTML = '<span><b>'+list.length+'</b> pedals on the wall of '+PACKS.length+' in the registry</span>'+
+    (state.trust.unverified
+      ? '<span class="drawer">drawer open — unverified scopes are on the wall</span>'
+      : '<span class="drawer">'+hiddenUnverified+' unverified in the drawer (§8.3 — excluded from the default wall)</span>')+
+    '<span>shelf '+(state.shelf+1)+' of '+shelves+'</span>';
+
+  /* pager */
+  const leds = [];
+  for(let i=0;i<shelves;i++) leds.push('<i class="'+(i===state.shelf?'on':'')+'"></i>');
+  pager.querySelector('.shelfled').innerHTML = leds.join('');
+  pager.querySelector('.shelfcap').textContent = 'shelf '+(state.shelf+1)+' / '+shelves;
+  pager.querySelector('[data-prev]').disabled = state.shelf<=0;
+  pager.querySelector('[data-next]').disabled = state.shelf>=shelves-1;
+}
+function CSS_ESC(s){ return s.replace(/["\\]/g,'\\$&'); }
+
+/* ---------- footswitch interaction ---------- */
+function packByName(n){ return PACKS.find(p=>p.name===n); }
+function bindingOf(p,ev){ return p.bindings.find(b2=>b2.event===ev); }
+
+function stomp(btn, viaHover){
+  const p = packByName(btn.getAttribute('data-pack'));
+  if(!p) return;
+  const bd = bindingOf(p, btn.getAttribute('data-event'));
+  if(!bd) return;
+  lcdBinding(p, bd);
+  const pedal = btn.closest('.pedal');
+  const cv = pedal && pedal.querySelector('[data-scope]');
+  const cap = pedal && pedal.querySelector('[data-scopecap]');
+  if(cv) drawScope(cv, pcmFor(p, bd.sound));
+  if(cap) cap.textContent = bd.event+' · '+bd.sound;
+  const played = play(p, bd, viaHover);
+  const led = pedal && pedal.querySelector('[data-led]');
+  if(led && played){
+    led.classList.add('lit');
+    clearTimeout(led._t);
+    led._t = setTimeout(()=>led.classList.remove('lit'), 180);
+  }
+  if(!viaHover){
+    btn.classList.add('down');
+    clearTimeout(btn._t);
+    btn._t = setTimeout(()=>btn.classList.remove('down'), 130);
+  }
+  return played;
+}
+
+/* ---------- controls ---------- */
+function buildControls(){
+  /* mains rocker */
+  const rocker = document.getElementById('mains');
+  rocker.addEventListener('click', ()=>{
+    if(!armed){
+      armBoard();
+      rocker.setAttribute('aria-pressed','true');
+      document.getElementById('mainslamp').classList.add('lit');
+    }
+    lcdIdle();
+  });
+
+  /* master volume knob: drag + arrows */
+  const knob = document.getElementById('mvol');
+  function setVol(v){
+    masterVol = Math.max(0, Math.min(1, v));
+    knob.style.setProperty('--a', knobAngle(masterVol));
+    knob.setAttribute('aria-valuenow', Math.round(masterVol*100));
+    document.getElementById('mvolcap').textContent = Math.round(masterVol*100)+'%';
+    lcdIdle();
+  }
+  setVol(masterVol);
+  knob.addEventListener('keydown', e=>{
+    if(e.key==='ArrowUp'||e.key==='ArrowRight'){ setVol(masterVol+0.05); e.preventDefault(); }
+    else if(e.key==='ArrowDown'||e.key==='ArrowLeft'){ setVol(masterVol-0.05); e.preventDefault(); }
+  });
+  let dragging=false, lastY=0;
+  knob.addEventListener('pointerdown', e=>{dragging=true;lastY=e.clientY; if(knob.setPointerCapture&&e.pointerId!==undefined) try{knob.setPointerCapture(e.pointerId);}catch(err){}});
+  knob.addEventListener('pointermove', e=>{ if(!dragging) return; setVol(masterVol+(lastY-e.clientY)*0.006); lastY=e.clientY; });
+  knob.addEventListener('pointerup', ()=>{dragging=false;});
+
+  /* rotary approach selector */
+  const APPR = ['all','tactile','jingle','bed','hybrid'];
+  const dial = document.getElementById('dial');
+  const optWrap = document.getElementById('rotopts');
+  optWrap.innerHTML = APPR.map((a,i)=>
+    '<button class="rot-opt" role="radio" type="button" aria-checked="'+(i===0)+'" data-appr="'+a+'">'+
+    (a==='all'?'all approaches':a)+'</button>').join('');
+  function setAppr(a){
+    state.approach=a; state.shelf=0;
+    const i = APPR.indexOf(a);
+    dial.style.setProperty('--a', (-120 + i*60)+'deg');
+    dial.setAttribute('aria-valuetext', a);
+    dial.setAttribute('aria-valuenow', String(i));
+    optWrap.querySelectorAll('.rot-opt').forEach(b2=>
+      b2.setAttribute('aria-checked', String(b2.getAttribute('data-appr')===a)));
+    render();
+  }
+  setAppr('all');
+  optWrap.addEventListener('click', e=>{
+    const b2=e.target.closest('.rot-opt'); if(b2) setAppr(b2.getAttribute('data-appr'));
+  });
+  dial.addEventListener('click', ()=> setAppr(APPR[(APPR.indexOf(state.approach)+1)%APPR.length]));
+  dial.addEventListener('keydown', e=>{
+    const i = APPR.indexOf(state.approach);
+    if(e.key==='ArrowRight'||e.key==='ArrowUp'){ setAppr(APPR[(i+1)%APPR.length]); e.preventDefault(); }
+    else if(e.key==='ArrowLeft'||e.key==='ArrowDown'){ setAppr(APPR[(i+APPR.length-1)%APPR.length]); e.preventDefault(); }
+  });
+
+  /* agent toggles */
+  const ag = document.getElementById('agenttogs');
+  ag.innerHTML = AGENTS.map(a=>
+    '<button class="tog" type="button" aria-pressed="false" data-agent="'+a.id+'">'+
+      '<span class="body"><span class="lamp"></span></span>'+
+      '<span class="txt">'+a.label+'<span class="sub">every bound hook native</span></span>'+
+    '</button>').join('');
+  ag.addEventListener('click', e=>{
+    const b2=e.target.closest('.tog'); if(!b2) return;
+    const id=b2.getAttribute('data-agent');
+    state.agents[id]=!state.agents[id]; state.shelf=0;
+    b2.setAttribute('aria-pressed', String(state.agents[id]));
+    render();
+  });
+
+  /* trust toggles */
+  const TR=[['curated','maintainer-picked'],['attested','key proved github/dns'],['unverified','the drawer — §8.3']];
+  const tr = document.getElementById('trusttogs');
+  tr.innerHTML = TR.map(t=>
+    '<button class="tog'+(t[0]==='unverified'?' danger':'')+'" type="button" aria-pressed="'+
+      String(state.trust[t[0]])+'" data-trust="'+t[0]+'">'+
+      '<span class="body"><span class="lamp"></span></span>'+
+      '<span class="txt">'+t[0]+'<span class="sub">'+t[1]+'</span></span>'+
+    '</button>').join('');
+  tr.addEventListener('click', e=>{
+    const b2=e.target.closest('.tog'); if(!b2) return;
+    const k=b2.getAttribute('data-trust');
+    state.trust[k]=!state.trust[k]; state.shelf=0;
+    b2.setAttribute('aria-pressed', String(state.trust[k]));
+    render();
+  });
+
+  /* legend switch */
+  const lg = document.getElementById('legendtog');
+  lg.addEventListener('click', ()=>{
+    state.legend=!state.legend;
+    lg.setAttribute('aria-pressed', String(state.legend));
+    document.body.classList.toggle('legend', state.legend);
+    wall.querySelectorAll('.fname').forEach(el=>{
+      el.textContent = state.legend ? el.getAttribute('data-full') : el.getAttribute('data-abbr');
+    });
+  });
+
+  /* tag jacks */
+  const jb = document.getElementById('jacks');
+  jb.innerHTML = ALL_TAGS.map(t=>
+    '<button class="jack" type="button" aria-pressed="false" data-tag="'+t+'" aria-label="patch tag '+t+'">'+
+      '<span class="hole"></span><span class="lbl">'+t+'</span></button>').join('');
+  jb.addEventListener('click', e=>{
+    const b2=e.target.closest('.jack'); if(!b2) return;
+    const t=b2.getAttribute('data-tag');
+    if(state.tags.has(t)) state.tags.delete(t); else state.tags.add(t);
+    b2.setAttribute('aria-pressed', String(state.tags.has(t)));
+    state.shelf=0; render();
+  });
+
+  /* sort slide switch */
+  const SORTS=[['newest','newest'],['installs','most installed'],['plays','most played']];
+  const sl = document.getElementById('sortslide');
+  sl.innerHTML = SORTS.map(s=>
+    '<button class="slide-opt" role="radio" type="button" aria-checked="'+(s[0]===state.sort)+
+    '" data-sort="'+s[0]+'">'+s[1]+'</button>').join('');
+  sl.addEventListener('click', e=>{
+    const b2=e.target.closest('.slide-opt'); if(!b2) return;
+    state.sort=b2.getAttribute('data-sort'); state.shelf=0;
+    sl.querySelectorAll('.slide-opt').forEach(o=>
+      o.setAttribute('aria-checked', String(o.getAttribute('data-sort')===state.sort)));
+    render();
+  });
+
+  /* bypass all */
+  document.getElementById('bypass').addEventListener('click', ()=>{
+    state.approach='all'; state.sort='newest'; state.shelf=0;
+    state.agents={c:false,x:false,u:false};
+    state.trust={curated:true,attested:true,unverified:false};
+    state.tags.clear();
+    setAppr('all');
+    ag.querySelectorAll('.tog').forEach(b2=>b2.setAttribute('aria-pressed','false'));
+    tr.querySelectorAll('.tog').forEach(b2=>
+      b2.setAttribute('aria-pressed', String(state.trust[b2.getAttribute('data-trust')])));
+    jb.querySelectorAll('.jack').forEach(b2=>b2.setAttribute('aria-pressed','false'));
+    sl.querySelectorAll('.slide-opt').forEach(o=>
+      o.setAttribute('aria-checked', String(o.getAttribute('data-sort')==='newest')));
+    render();
+  });
+
+  /* pager */
+  pager.querySelector('[data-prev]').addEventListener('click', ()=>{
+    if(state.shelf>0){ state.shelf--; render(); }
+  });
+  pager.querySelector('[data-next]').addEventListener('click', ()=>{
+    state.shelf++; render();
+  });
+}
+
+/* ---------- boot ---------- */
+function boot(){
+  wall  = document.getElementById('wall');
+  pager = document.getElementById('pager');
+  lcd.l1 = document.querySelector('.lcd .l1');
+  lcd.l2 = document.querySelector('.lcd .l2');
+  lcd.l3 = document.querySelector('.lcd .l3');
+
+  buildControls();
+  render();
+  lcdIdle();
+
+  wall.addEventListener('pointerover', e=>{
+    const b2 = e.target && e.target.closest && e.target.closest('.fsw');
+    if(b2) stomp(b2, true);
+  });
+  wall.addEventListener('click', e=>{
+    const b2 = e.target && e.target.closest && e.target.closest('.fsw');
+    if(b2) stomp(b2, false);
+  });
+  wall.addEventListener('keydown', e=>{
+    if(e.key!=='Enter' && e.key!==' ' && e.key!=='Spacebar') return;
+    const b2 = e.target && e.target.closest && e.target.closest('.fsw');
+    if(!b2) return;
+    e.preventDefault();          /* suppress the synthetic click so it fires once */
+    stomp(b2, false);
+  });
+  wall.addEventListener('focusin', e=>{
+    const b2 = e.target && e.target.closest && e.target.closest('.fsw');
+    if(!b2) return;
+    const p = packByName(b2.getAttribute('data-pack'));
+    const bd = p && bindingOf(p, b2.getAttribute('data-event'));
+    if(bd) lcdBinding(p, bd);    /* focus describes, it does not play */
+  });
+
+  window.__T = {
+    state, PACKS, AGENTS, render, stomp, play, reach, coverage, fullyNative,
+    pcmFor, renderSdsl, masterChain, peaksFrom, SUPPORT, FALLBACK, ROLE,
+    voices:()=>voices, armed:()=>armed, setMaster:v=>{masterVol=v;},
+    HOVER_THROTTLE, POLYPHONY
+  };
+}
+if(typeof document!=='undefined'){
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+}
+
+</script>
+</body>
+</html>
