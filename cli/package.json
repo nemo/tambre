@@ -1,40 +1,29 @@
 {
   "name": "@tambre/cli",
-  "version": "0.0.1",
-  "description": "Sound packs for AI coding agents. Namespace reserved — the CLI is not implemented yet; see the spec and design library at github.com/nemo/tambre.",
-  "keywords": [
-    "sound",
-    "audio",
-    "hooks",
-    "sonification",
-    "ai-agent",
-    "claude-code",
-    "codex",
-    "cursor"
-  ],
+  "version": "0.1.0-spike",
+  "description": "Hear what your coding agent is doing. A synth daemon driven by agent hooks.",
+  "type": "module",
+  "keywords": ["sound", "audio", "hooks", "sonification", "ai-agent", "claude-code", "codex"],
   "author": "nemo",
   "license": "MIT",
   "homepage": "https://nemo.github.io/tambre/",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/nemo/tambre.git",
-    "directory": "cli"
+  "repository": { "type": "git", "url": "git+https://github.com/nemo/tambre.git", "directory": "cli" },
+  "bugs": { "url": "https://github.com/nemo/tambre/issues" },
+  "bin": { "tambre": "dist/tambre.js" },
+  "files": ["dist/", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/tambre.ts",
+    "demo": "tsx src/tambre.ts demo"
   },
-  "bugs": {
-    "url": "https://github.com/nemo/tambre/issues"
+  "dependencies": {
+    "node-web-audio-api": "^2.2.0"
   },
-  "bin": {
-    "tambre": "bin/tambre.js"
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.0"
   },
-  "files": [
-    "bin/",
-    "README.md",
-    "LICENSE"
-  ],
-  "engines": {
-    "node": ">=18"
-  },
-  "publishConfig": {
-    "access": "public"
-  }
+  "publishConfig": { "access": "public" }
 }
