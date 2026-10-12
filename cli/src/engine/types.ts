@@ -40,12 +40,13 @@ export type CanonicalEvent =
 
 export const DEFAULT_FRAME: Frame = {
   root: 43, // G2
-  // Over a pedal: m7b13 -> m9b13-ish -> m11 -> m7. Octave spread kept verbatim.
+  // Over a pedal, warm: maj9 -> 6/9 -> sus4add9 -> maj13. Every voicing
+  // except the sus carries the major third; no b6, b7, b9 or tritone anywhere.
   voicings: [
-    [0, 15, 19, 20, 22],
-    [0, 7, 8, 15, 26],
-    [0, 10, 15, 17, 26],
-    [0, 7, 10, 15, 22],
+    [0, 4, 7, 11, 14],
+    [0, 7, 9, 12, 16],
+    [0, 5, 7, 12, 14],
+    [0, 4, 11, 14, 21],
   ],
   bpm: 60,
   chordBars: 4,

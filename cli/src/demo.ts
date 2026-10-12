@@ -8,7 +8,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * A works, B joins, A gets blocked on permission, A finishes and goes quiet,
  * B keeps going, B finishes and leaves.
  */
-export async function runDemo(opts: { volume?: number; voices?: [string, string] } = {}): Promise<void> {
+export async function runDemo(opts: { volume?: number; voices?: [string, string]; out?: string } = {}): Promise<void> {
   const [aName, bName] = opts.voices ?? ['moss', 'brass'];
   const A = PALETTE.find((v) => v.name === aName) ?? PALETTE[0];
   const B = PALETTE.find((v) => v.name === bName) ?? PALETTE[1];
@@ -17,6 +17,7 @@ export async function runDemo(opts: { volume?: number; voices?: [string, string]
   const log = (s: string) => process.stdout.write(`${String(((Date.now() - t0) / 1000).toFixed(1)).padStart(5)}s  ${s}\n`);
 
   await engine.start();
+  if (opts.out) engine.record(opts.out);
   log(`context running, latency ${(engine.ctx.baseLatency * 1000).toFixed(1)} ms base, root ${engine.frame.root}`);
 
   engine.addSession('A', A);

@@ -1,4 +1,5 @@
 import { AudioContext } from 'node-web-audio-api';
+import { writeWav } from './wav.js';
 import type { DynamicsCompressorNode, GainNode, OscillatorNode } from 'node-web-audio-api';
 import { Harmony } from './harmony.js';
 import { SessionVoice } from './voice.js';
@@ -22,9 +23,13 @@ export class Engine {
   readonly ctx: AudioContext;
   readonly harmony: Harmony;
   private master: GainNode;
+  private recChunks: [Float32Array, Float32Array][] = [];
+  private recPath?: string;
+  private recNode?: ScriptProcessorNode;
   private bed: GainNode;
   private comp: DynamicsCompressorNode;
   private sub!: { osc: OscillatorNode; gain: GainNode };
+  private chordBed!: { oscs: { osc: OscillatorNode; tone: number }[]; gain: GainNode };
   private lfos: OscillatorNode[] = [];
   private sessions = new Map<string, SessionVoice>();
   private chordTimer: NodeJS.Timeout | null = null;
@@ -96,7 +101,44 @@ export class Engine {
     sub.start(now);
     this.sub = { osc: sub, gain: sg };
 
+    this.makeChordBed(now);
     this.scheduleChord();
+  }
+
+  /**
+   * The shared pad: chord tones 1..4 one octave up (250-450 Hz, where warmth lives), triangle pairs
+   * detuned +/-4 cents through a dark lowpass. Quiet, but it is what makes
+   * the colour cycle audible and gives the session voices something to sit in.
+   */
+  private makeChordBed(now: number): void {
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1500;
+    lp.Q.value = 0.7;
+    lp.connect(gain);
+    gain.connect(this.bed);
+    const oscs: { osc: OscillatorNode; tone: number }[] = [];
+    for (let tone = 1; tone <= 4; tone++) {
+      for (const d of [-3 - tone * 0.5, 3 + tone * 0.6]) {
+        const osc = this.ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.detune.value = d;
+        osc.frequency.value = this.harmony.chordFreq(tone, 1);
+        const g = this.ctx.createGain();
+        g.gain.value = 0.03;
+        osc.connect(g);
+        g.connect(lp);
+        osc.start(now);
+        oscs.push({ osc, tone });
+      }
+    }
+    this.chordBed = { oscs, gain };
+    this.harmony.onChord(() => {
+      const t = this.ctx.currentTime;
+      for (const o of this.chordBed.oscs) o.osc.frequency.setTargetAtTime(this.harmony.chordFreq(o.tone, 1), t, 0.06);
+    });
   }
 
   private scheduleChord(): void {
@@ -109,22 +151,23 @@ export class Engine {
     }, this.harmony.chordSeconds() * 1000);
   }
 
-  /** Three quiet glass bells, staggered 90 ms, mark the colour change. */
+  /** Three soft bells, staggered 90 ms, mark the colour change. */
   private chordRoll(): void {
     const now = this.ctx.currentTime;
     for (let i = 0; i < 3; i++) {
       bell(this.ctx, this.bed, {
         midi: this.harmony.chordTone(i * 2, 1),
         when: now + i * 0.09,
-        dur: 1.4,
-        gain: 0.05,
-        colour: 'glass',
+        dur: 1.2,
+        gain: 0.045,
+        colour: 'soft',
       });
     }
   }
 
   private subTo(level: number, tc = 0.8): void {
     this.sub.gain.gain.setTargetAtTime(level, this.ctx.currentTime, tc);
+    this.chordBed.gain.gain.setTargetAtTime(level > 0 ? 1 : 0, this.ctx.currentTime, tc);
   }
 
   // ---- sessions ----
@@ -145,7 +188,7 @@ export class Engine {
     this.nextRung += 2;
     const sv = new SessionVoice(this.ctx, this.bed, this.harmony, voice, rung);
     this.sessions.set(id, sv);
-    this.subTo(0.05);
+    this.subTo(0.045);
     return sv;
   }
 
@@ -195,10 +238,34 @@ export class Engine {
   }
 
   /** Resolves once the last tail has rung out, then releases the device. */
+  /** Tap the compressor output and write it to a WAV on close(). */
+  record(path: string): void {
+    this.recPath = path;
+    const sp = this.ctx.createScriptProcessor(4096, 2, 2);
+    sp.onaudioprocess = (e) => {
+      const l = e.inputBuffer.getChannelData(0);
+      const r = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : l;
+      this.recChunks.push([Float32Array.from(l), Float32Array.from(r)]);
+      e.outputBuffer.getChannelData(0).set(l);
+      e.outputBuffer.getChannelData(1).set(r);
+    };
+    this.comp.disconnect();
+    this.comp.connect(sp);
+    sp.connect(this.ctx.destination);
+    this.recNode = sp;
+  }
+
   async close(): Promise<void> {
     if (this.chordTimer) clearTimeout(this.chordTimer);
     for (const [id] of this.sessions) this.event(id, 'session.end');
     await new Promise((r) => setTimeout(r, (this.endTail + 0.6) * 1000));
     await this.ctx.close();
+    if (this.recPath) {
+      const n = this.recChunks.reduce((a, c) => a + c[0].length, 0);
+      const L = new Float32Array(n), R = new Float32Array(n);
+      let o = 0;
+      for (const [l, r] of this.recChunks) { L.set(l, o); R.set(r, o); o += l.length; }
+      writeWav(this.recPath, [L, R], this.ctx.sampleRate);
+    }
   }
 }

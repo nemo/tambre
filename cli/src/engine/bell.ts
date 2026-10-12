@@ -20,23 +20,23 @@ export function bell(ctx: AudioContext, out: AudioNode, o: BellOpts): void {
   env.gain.setValueAtTime(0, o.when);
   env.connect(out);
 
-  const attack = o.colour === 'soft' ? 0.04 : 0.004;
+  const attack = o.colour === 'soft' ? 0.05 : o.colour === 'glass' ? 0.012 : 0.008;
   env.gain.linearRampToValueAtTime(o.gain, o.when + attack);
   env.gain.setTargetAtTime(0, o.when + attack, o.dur / 4);
 
   const voices: [number, number, OscillatorType][] =
     o.colour === 'glass'
-      ? [[1, 1, 'sine'], [2.76, 0.18, 'sine'], [5.4, 0.05, 'sine']]
+      ? [[1, 1, 'sine'], [2.76, 0.09, 'sine'], [5.4, 0.015, 'sine']]
       : o.colour === 'wood'
         ? [[1, 1, 'triangle'], [2, 0.2, 'sine']]
         : [[1, 1, 'sine'], [2, 0.12, 'sine']];
 
   let last: AudioNode = env;
-  if (o.colour === 'wood') {
+  if (o.colour !== 'soft') {
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = Math.min(1400, f * 4);
-    lp.Q.value = 0.8;
+    lp.frequency.value = o.colour === 'wood' ? Math.min(1400, f * 4) : Math.min(3200, f * 6);
+    lp.Q.value = 0.7;
     env.disconnect();
     env.connect(lp);
     lp.connect(out);

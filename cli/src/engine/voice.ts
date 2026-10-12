@@ -7,7 +7,7 @@ const GLIDE = 0.06; // time constant; ~0.2 s to settle
 const PAIR_GAIN = 0.11; // per pad pair at full, before the filter
 const TEETH_GAIN = 0.06;
 
-const cutoffFor = (brightness: number) => 240 + brightness * 1100;
+const cutoffFor = (brightness: number) => 320 + brightness * 1200;
 
 interface PadPair {
   oscs: { osc: OscillatorNode; g: GainNode; rung: number }[];
@@ -90,7 +90,7 @@ export class SessionVoice {
         osc.detune.value = d;
         osc.frequency.value = this.harmony.chordFreq(rung, this.voice.register);
         const g = ctx.createGain();
-        const blend = type === 'triangle' ? 1 - this.voice.timbre : this.voice.timbre;
+        const blend = type === 'triangle' ? 1 - this.voice.timbre : this.voice.timbre * 0.55;
         g.gain.value = (PAIR_GAIN / 2) * blend;
         osc.connect(g);
         g.connect(pairGain);
@@ -226,7 +226,7 @@ export class SessionVoice {
   }
 
   turnEnd(): void {
-    this.strike(2, 1, 0, 1.8, 0.22);
+    this.strike(2, 1, 0, 1.4, 0.2);
   }
 
   turnFail(): void {

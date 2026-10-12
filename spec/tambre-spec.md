@@ -157,11 +157,81 @@ project's proposed frame if it has one, else the user frame. Later sessions
 join the frame with their own voice. The frame persists until the last
 session ends.
 
-### 3.8 Engine parameters — *pending spike*
+### 3.8 Engine parameters, as built and listened to (2026-10-12)
 
-Exact oscillator detune per voice index, filter ranges per state, LFO rates,
-bell synthesis, roll timings, gain per layer, and what the spike changed
-after listening.
+Listened with Inkling (native audio model) on rendered WAVs, cross-checked
+with a DFT of the drone. Every number below survived a listening pass.
+
+**Frame default.** Root G2 (MIDI 43). Voicings, semitones above the root,
+octave spread verbatim: `[0,4,7,11,14]` maj9, `[0,7,9,12,16]` 6/9,
+`[0,5,7,12,14]` sus4add9, `[0,4,11,14,21]` maj13. Every voicing but the
+sus carries the major third; no ♭6, ♭7, ♭9 or tritone anywhere. 60 BPM,
+4 bars per chord (16 s). The first version used m7♭13-family voicings and
+was heard as "eerie, dissonant"; this set was heard as a gentle colour
+shift, "about right for background".
+
+**Shared chord bed.** Chord tones 1..4 one octave up (250 to 450 Hz, where
+warmth lives), each a triangle pair detuned ∓(3 + 0.5·i) / ±(3 + 0.6·i)
+cents, gain 0.03 per oscillator, through a lowpass at 1500 Hz, Q 0.7.
+Up (time constant 0.8 s) while any session is live. This layer is what
+makes the chord cycle audible: without it each session is a dyad and the
+piece was heard as "static, no chord change". Putting it at octave 0
+stacked everything under 220 Hz and was heard as a "dark hollow hum".
+
+**Sub.** Sine one octave below the root, gain 0.045 while any session is
+live. 0.07 was heard as muddy.
+
+**Session voice.** Two pad pairs on ladder rungs `r` and `r+1` (sessions sit
+on rungs 0, 2, 4…). Each pair: two detunes, −(d−1)−1.8·i and +d+2.4·i
+cents (`d` = voice width.detune), each a triangle and a saw blended by
+`timbre`, with the saw scaled by 0.55 because it carries far more energy.
+Pair gain 0.11 before the filter. Lowpass Q 0.7 at `320 + brightness·1200`
+Hz with one LFO on the cutoff (depth·300 Hz at the voice's rate). The
+second pair sits at 0 and rises on tool activity (τ 0.25 s), falling 4 s
+after the last event (τ 0.6 s); activity also lifts brightness by 0.3.
+
+**Teeth (blocked).** Saw pair at −6/+7 cents an octave below the voice,
+gain 0.06, lowpass Q 2.2 opening from 170 Hz to `240 + brightness·780`
+Hz, τ 0.4 to 0.5 s. Heard as "harsher, biting, reads as tension, not
+merely louder" and dropping cleanly.
+
+**State moves.** working: voice gain → 1, τ 0.3. waiting: gain → 0, τ 0.7
+(silent in about 3 s). ended: gain → 0, τ 0.5, sources stop after the
+5 s end tail.
+
+**Bells.** Envelope: linear attack then exponential decay with τ = dur/4.
+Attack 12 ms glass, 8 ms wood, 50 ms soft; the first version's 4 ms attack
+was heard as a click on every strike. Glass: sine plus partials at 2.76×
+(0.09) and 5.4× (0.015), lowpass at min(3200, 6·f). The first version's
+0.18 and 0.05 partials were heard as "piercing, metallic". Wood: triangle
+plus 2× sine (0.2), lowpass at min(1400, 4·f). Soft: sine plus 2× sine
+(0.12), no filter.
+
+**Gestures.** Rung offsets on the ladder, delays, durations, gains:
+session.start 0/+2/+4 at octave +1, 0/90/180 ms, 1.2/1.2/1.6 s,
+0.18/0.16/0.14. session.end +4/+2/0, octave +1/+1/0, 0/90/180 ms,
+1.2/1.4/4.0 s, 0.16/0.15/0.20. turn.end +2, octave +1, 1.4 s, 0.20.
+permission.request 0 then +3 at octave +1, 180 ms apart, 0.9/1.6 s,
+0.18/0.20, then blocked. turn.fail wood toll on root −12 (2.5 s, 0.24)
+plus ♭9 (1.6 s, 0.08). compact wood tap on the rung, 0.15 s, 0.10.
+Chord change: three soft bells on rungs 0/2/4 at octave +1, 90 ms apart,
+1.2 s, 0.045.
+
+**Master.** Bed floor 0.82 modulated by two sine LFOs at 0.031 and 0.017
+rad/s (depths 0.10 and 0.07). Master 0.8 → compressor −18 dB, 6:1, attack
+10 ms, release 250 ms. Rendered demo measures −23 dB mean, −7 dB peak.
+
+**Palette.** moss (tri, soft bell, left), brass (timbre 0.55, glass,
+right), cedar (−1 octave, wood, hard left), glass (+1 octave, bright,
+hard right), reed (saw, wood), tide (−1 octave, deep movement), wire
+(+1 octave, brightest), felt (pure triangle, darkest). moss against brass
+was heard as "a lower darker smooth pad centre-left" against "a higher
+brighter glassier tone on the right".
+
+**Still unproven by ear.** Whether the drone reads as *warm* rather than
+neutral: the listening model called a plain major triad "ambiguous, no
+third" too, so chord-quality judgements from it are not evidence. A human
+listening pass decides this.
 
 ---
 
