@@ -96,7 +96,7 @@ export function rulerStart(l: Layout, index: number): number {
   return 2 + COMPACT_LABEL_W + 1 + compactValueW(l.cols) + 1;
 }
 
-export const BANNER = 'daemon unreachable · no audio · editing and saving still work';
+export const BANNER = 'daemon unreachable · no audio · editing and saving still work · tambre doctor explains';
 
 const pad = (s: string, w: number): string => (s.length >= w ? s.slice(0, w) : s + ' '.repeat(w - s.length));
 const rule = (cols: number): Line => [{ text: '─'.repeat(cols), dim: true }];
@@ -186,7 +186,7 @@ function transportLines(v: View, l: Layout): Line[] {
   const out: Line[] = [];
   const sessions = v.status?.sessions ?? [];
   if (sessions.length === 0) {
-    const text = v.daemon === 'ok' ? 'no sessions · daemon ok' : v.daemon === 'starting' ? 'starting daemon…' : 'daemon unreachable · tambre doctor explains';
+    const text = v.daemon === 'ok' ? 'no sessions · daemon ok' : v.daemon === 'starting' ? 'starting daemon…' : 'no sessions';
     out.push([{ text: '  ' + text, dim: true }]);
   } else {
     const shown = sessions.slice(0, l.transportLines - (sessions.length > l.transportLines ? 1 : 0));
@@ -228,7 +228,7 @@ export function renderLines(v: View, l: Layout): Line[] {
   lines.push(headerLine(v, l.cols));
   lines.push(tabsLine(v));
   lines.push(rule(l.cols));
-  if (l.bannerLines) lines.push([{ text: BANNER, color: 'red' }]);
+  if (l.bannerLines) lines.push([{ text: BANNER, bold: true }]);
   if (l.noteLines) for (const n of NOTE) lines.push([{ text: n }]);
 
   const locked = (v.status?.sessions.length ?? 0) > 0;

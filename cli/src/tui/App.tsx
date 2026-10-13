@@ -142,12 +142,14 @@ export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs 
     }
   }, [control, locked, status]);
 
+  // Keyed on the session count, not the status object: status is replaced
+  // every poll and would otherwise overwrite other feedback each second.
+  const liveCount = status?.sessions.length ?? 0;
   useEffect(() => {
     const cell = cells[focused];
     if (!locked || page !== 'frame' || !cell || cell.kind === 'blank' || cell.kind === 'pick' || !cell.frame) return;
-    const n = status?.sessions.length ?? 0;
-    setMessage(`${cell.label} is locked while ${n} session${n === 1 ? ' is' : 's are'} live · edits save to your user config and apply at the next daemon start`);
-  }, [cells, focused, locked, page, status]);
+    setMessage(`${cell.label} is locked while ${liveCount} session${liveCount === 1 ? ' is' : 's are'} live · edits save to your user config and apply at the next daemon start`);
+  }, [cells, focused, locked, page, liveCount]);
 
   const nudge = useCallback((dir: -1 | 1) => {
     const cell = cells[focused];
