@@ -1,6 +1,6 @@
 # Surface brief: the TUI (`tambre`)
 
-Status: shaped and confirmed 2026-10-12; direction contract recorded; build in progress.
+Status: shipped 2026-10-12. Finish review: disposition ship after two verdict passes (eight material fixes plus three residuals resolved). DESIGN.md and .impeccable/design.json written from the build.
 
 ## Direction contract
 

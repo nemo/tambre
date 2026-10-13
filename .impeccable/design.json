@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-12T00:00:00Z",
+  "title": "Design System: tambre",
+  "medium": "terminal (Ink TUI). Colours are the terminal's 16-colour names; weights are terminal attributes (bold / dim); measures are character columns and lines. The terminal theme owns every hue, so no hex, OKLCH, tonal ramp, font, or pixel value is recorded. Component snippets below are <pre> previews for the panel: `yellow`/`red` stand for the terminal colours and `opacity` stands in for the dim attribute.",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Accent (terminal yellow)", "canonical": "yellow", "tonalRamp": [], "purpose": "The focused cell's ▸ and label, the active tab word, the patch-name prompt label." },
+      "mute": { "role": "tertiary", "displayName": "Mute (terminal red)", "canonical": "red", "tonalRamp": [], "purpose": "A muted session's [x] in the transport strip. Nowhere else." },
+      "foreground": { "role": "neutral", "displayName": "Terminal foreground", "canonical": "inherit", "tonalRamp": [], "purpose": "Everything else, in three attributes: bold (values, wordmark, selected session, blocked, banner), normal (filled ruler, status, project names), dim (labels, rules, empty ruler, help, inactive tabs)." }
+    },
+    "typographyMeta": {
+      "value": { "displayName": "Value", "purpose": "The bold number or word a cell holds; the loudest glyphs in any cell." },
+      "label": { "displayName": "Label", "purpose": "Dim lowercase parameter name on the cell's first line." },
+      "label-focused": { "displayName": "Label (focused)", "purpose": "The focused cell's label: un-dimmed and yellow." },
+      "wordmark": { "displayName": "Wordmark", "purpose": "`tambre` bold at top left; the header's right side is dim." },
+      "tab-active": { "displayName": "Tab (active)", "purpose": "Bold yellow uppercase page word." },
+      "tab-inactive": { "displayName": "Tab (inactive)", "purpose": "Dim uppercase page word." },
+      "ruler-filled": { "displayName": "Ruler filled", "purpose": "━ cells at normal weight." },
+      "ruler-empty": { "displayName": "Ruler empty", "purpose": "╌ cells dimmed." },
+      "status": { "displayName": "Status", "purpose": "One lowercase line at normal weight reporting the last action." },
+      "help": { "displayName": "Help", "purpose": "Dim `key verb` pairs two spaces apart." },
+      "banner": { "displayName": "Banner", "purpose": "The bold daemon-unreachable line under the tab rule." }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [
+      { "name": "four-columns", "value": "80 cols", "purpose": "At 80 columns or wider the grid is 2×4 three-line cells of floor(cols/4) width; narrower, eight one-line cells in one column." },
+      { "name": "two-help-rows", "value": "26 rows", "purpose": "At 26 rows or taller the help is two rows; shorter, one row trimmed from the end." },
+      { "name": "transport-max", "value": "8 lines", "purpose": "The transport strip shows at most eight sessions, then a dim `+N more`." }
+    ],
+    "marks": [
+      { "glyph": "▸", "meaning": "focus; yellow in the grid, bold in the transport strip; a two-column slot holds its place when absent" },
+      { "glyph": "━ / ╌", "meaning": "filled / empty ruler cell; 12 per ruler on one shared ramp" },
+      { "glyph": "‹ ›", "meaning": "dim brackets around a cycle cell's ruler" },
+      { "glyph": "[x] / [ ]", "meaning": "muted (red) / not muted (dim)" },
+      { "glyph": "─", "meaning": "dim full-width hairline between regions" },
+      { "glyph": "•", "meaning": "the palette voice or patch loaded in the editor" },
+      { "glyph": "·", "meaning": "separator inside a line" },
+      { "glyph": "…", "meaning": "truncated path" },
+      { "glyph": "locked", "meaning": "replaces a frame cell's ruler while sessions are live" }
+    ],
+    "geometry": {
+      "grid": "2 rows × 4 columns; cell width floor(cols/4); 3 lines per cell; 1 blank line between rows",
+      "ruler": "12 cells, 2 columns in from the cell's left edge; cycle ruler 1 column in so ‹ › flank the same 12",
+      "tabs": "five words on line 2 with a 2-column gap",
+      "transport": "columns 2 mark, 3 index, 9 voice, 19 project, 10 state, 3 mute, texture; mute mark at column 43",
+      "compact": "mark 2, label 12, value max(8, cols-29), ruler 12",
+      "stack": "header, tabs, rule, [banner 1], [first-run note 3], grid 7 (8 compact), rule, transport 1–8, rule, status, help 1–2"
+    }
+  },
+  "components": [
+    {
+      "name": "Cell (range)",
+      "kind": "custom",
+      "refersTo": "cell-value",
+      "description": "Three lines: dim label after the mark slot, bold value, 12-cell ruler. Preview approximation of terminal attributes.",
+      "html": "<pre class=\"ds-tui\"><span class=\"ds-dim\">  brightness             </span>\n<b>  0.55</b>\n  ━━━━━━━<span class=\"ds-dim\">╌╌╌╌╌</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-dim { opacity: 0.55; }"
+    },
+    {
+      "name": "Cell (focused)",
+      "kind": "custom",
+      "refersTo": "cell-label-focused",
+      "description": "The focused cell: yellow ▸ in the mark slot and a yellow un-dimmed label; value and ruler unchanged.",
+      "html": "<pre class=\"ds-tui\"><span class=\"ds-accent\">▸ timbre                 </span>\n<b>  0.05</b>\n  ━<span class=\"ds-dim\">╌╌╌╌╌╌╌╌╌╌╌</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-accent { color: yellow; } .ds-dim { opacity: 0.55; }"
+    },
+    {
+      "name": "Cell (cycle)",
+      "kind": "custom",
+      "refersTo": "ruler",
+      "description": "A cycle cell: the third line is ‹ + 12-cell ruler + › in dim brackets; the fill is the option's position among its siblings.",
+      "html": "<pre class=\"ds-tui\"><span class=\"ds-dim\">  texture                </span>\n<b>  hush</b>\n <span class=\"ds-dim\">‹</span>━━━━━━━━━━<span class=\"ds-dim\">╌╌›</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-dim { opacity: 0.55; }"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "Five uppercase page words two columns apart; the active one bold yellow, the rest dim; a dim hairline beneath.",
+      "html": "<pre class=\"ds-tui\"><span class=\"ds-dim\">PALETTE</span>  <b class=\"ds-accent\">VOICE</b>  <span class=\"ds-dim\">FRAME  ADVANCED  PATCHES</span>\n<span class=\"ds-dim\">────────────────────────────────────────</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-accent { color: yellow; } .ds-dim { opacity: 0.55; }"
+    },
+    {
+      "name": "Transport row",
+      "kind": "custom",
+      "refersTo": "session-mute-on",
+      "description": "One line per live session: bold ▸ on the selected one, dim index, voice, project, state (bold when blocked, dim when waiting or ended), [x] red or [ ] dim, dim texture.",
+      "html": "<pre class=\"ds-tui\"><b>▸ </b><span class=\"ds-dim\">01 </span><b>brass    </b> proj               working  <span class=\"ds-dim\">[ ]</span><span class=\"ds-dim\">  hush</span>\n  <span class=\"ds-dim\">02 </span>moss      proj2              <b>blocked  </b><span class=\"ds-mute\">[x]</span><span class=\"ds-dim\">  hush</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-mute { color: red; } .ds-dim { opacity: 0.55; }"
+    },
+    {
+      "name": "Status line and help",
+      "kind": "custom",
+      "refersTo": "daemon-banner",
+      "description": "The one-line lowercase status at normal weight above dim `key verb` help pairs; the daemon banner is the same line type in bold.",
+      "html": "<pre class=\"ds-tui\"><span class=\"ds-dim\">────────────────────────────────────────</span>\nmuted brass\n<span class=\"ds-dim\">tab page  ↑↓←→ cell  h/l adjust  space hear  s save  q quit</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-dim { opacity: 0.55; }"
+    },
+    {
+      "name": "Patch-name prompt",
+      "kind": "input",
+      "refersTo": "tab-active",
+      "description": "Replaces the status line: yellow label, typed text, an inverse-video space as the cursor, dim key hint.",
+      "html": "<pre class=\"ds-tui\"><span class=\"ds-accent\">patch name: </span>warm evening<span class=\"ds-cursor\"> </span><span class=\"ds-dim\">  Enter saves, Esc cancels</span></pre>",
+      "css": ".ds-tui { font-family: ui-monospace, Menlo, monospace; margin: 0; white-space: pre; } .ds-accent { color: yellow; } .ds-cursor { background: currentColor; } .ds-dim { opacity: 0.55; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Parameter Page",
+    "overview": "tambre's terminal UI is one hardware-synth parameter page per Tab: eight cells in a 2×4 grid, each a small label over a large value over a short bar on one shared 12-cell ramp. The number you see is the sound you hear; move it and the sound moves. The page is made of nothing but the terminal's own glyphs and attributes. There are no drawn boxes, no bracketed sliders, no knobs, LEDs, or bezels. Hairline rules separate the four regions (tabs, grid, transport, status), and everything that is not in hand is dimmed.\n\nColour is almost absent. Terminal yellow marks the one thing being edited (the focused cell and the active tab). Terminal red appears in exactly one place: a muted session's `[x]`. Everything else is the terminal's default foreground, either bold (values, the wordmark, the live-session mark) or dim (labels, rules, empty ruler cells, help). Every state is also a mark (`▸`, `[x]`, `‹ ›`, `•`, `locked`), so the page reads identically in a monochrome terminal.\n\nThis file records the terminal surface's world. PRODUCT.md lists the platform as `web` for the landing page at the repo root; that page has no visual world yet and must not inherit these terminal marks (`▸`, `━╌`, `[x]`, hairlines) as decoration. A web world, when one is chosen, is a separate decision.",
+    "keyCharacteristics": [
+      "Typography and rules only; nothing that imitates a device.",
+      "One accent (yellow) for focus, one alarm (red) for mute, dim for the inert.",
+      "Values are the loudest glyphs on screen (bold); labels the quietest (dim).",
+      "Every cell carries a 12-cell ruler on one shared ramp: `━` filled, `╌` empty.",
+      "Every state has a mark; colour is never the only signal.",
+      "One lowercase status line reports the last action; nothing else speaks."
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Yellow means \"this is what you are editing\" and nothing else. The transport strip's selected session uses a bold `▸`, not a yellow one, because selecting a session is not editing it.", "section": "colors" },
+      { "name": "The Red Is Mute Rule", "body": "Red appears only on a muted session's `[x]`. No red for errors, warnings, or the daemon banner; those are bold text on the status line.", "section": "colors" },
+      { "name": "The Mark Before Colour Rule", "body": "Any state that is coloured is also marked: focus is `▸`, mute is `[x]`, a cycle cell is `‹ ›`, the loaded voice is `•`. Remove every colour and the page still reads.", "section": "colors" },
+      { "name": "The Lowercase Rule", "body": "Labels, values, status messages, and help are lowercase. Tab titles are the only uppercase words; key names are written as typed (`Enter`, `Tab`, `s`); the first-run note is in sentences.", "section": "typography" },
+      { "name": "The Value Is Loudest Rule", "body": "Within a cell, only the value is bold. A bold label or bold ruler would compete with the number the user is listening to.", "section": "typography" },
+      { "name": "The No Border Rule", "body": "Regions are separated by a single dim `─` hairline across the full width. Nothing is boxed; the terminal's own edge is the only frame.", "section": "layout" },
+      { "name": "The Attribute Is Depth Rule", "body": "Never draw a region to lift it. Bold brings forward, dim pushes back, and a hairline separates.", "section": "elevation" },
+      { "name": "The Glyph Vocabulary Rule", "body": "A new state gets a glyph from this list or a lowercase word; it never gets a drawn box, a bracket slider `[====  ]`, or an emoji.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do mark focus with a yellow `▸` in the two-column mark slot and dim everything unfocused.",
+      "Do put the value in bold and nothing else in the cell.",
+      "Do draw every ruler as 12 cells of `━` and `╌`; a cycle cell adds `‹ ›` around the same 12 cells.",
+      "Do separate regions with one dim full-width `─` hairline.",
+      "Do write labels, values, status, and help in lowercase; keep tab titles as the only uppercase words.",
+      "Do report each action in one status line, with `·` between parts and no trailing period.",
+      "Do collapse to one column below 80 columns and to one help row below 26 rows."
+    ],
+    "donts": [
+      "Don't draw boxes, panels, bracket sliders, knobs, LEDs, or bezels; the grid is typography and rules only.",
+      "Don't use yellow for anything but the focused cell, the active tab, and the prompt label.",
+      "Don't use red for anything but a muted session's `[x]`.",
+      "Don't convey a state by colour alone; give it a glyph from the vocabulary or a lowercase word.",
+      "Don't bold a label or a ruler; only values, the wordmark, the active tab, the selected session, `blocked`, and the banner are bold.",
+      "Don't carry these marks onto the web landing page as decoration; that surface has no world yet."
+    ]
+  }
+}
