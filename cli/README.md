@@ -26,6 +26,29 @@ it nothing is ever printed.
 Requires Node 22+. Audio output is `node-web-audio-api` (prebuilt for macOS,
 Linux, and Windows on x64 and arm64).
 
+## Configuration
+
+`~/.tambre/config.json` (directory overridable with `TAMBRE_HOME`) holds the
+user frame, default voice, texture, volume, mute, per-project palette
+assignments and saved patches. `<project>/tambre.json` holds a project voice,
+an optional frame proposal and an optional texture; it is pure data and safe
+to commit. See `src/config.ts` for the exact shapes; bad input never throws,
+it falls back to defaults with warnings.
+
+Texture (`drone`, `breath`, `pulse`, `rain`, `hum`, `hush`, `none`) is per
+session: the project texture wins, else the user default (`hush`).
+
+## Development
+
+```sh
+npm test                            # vitest; runs with TAMBRE_NO_AUDIO=1, no device needed
+TAMBRE_SOCKET=/tmp/t.sock node dist/tambre.js daemon   # run a daemon on a private socket
+```
+
+`TAMBRE_NO_AUDIO=1` makes the engine open an inert stub context instead of a
+device (nothing is heard, the native addon is not loaded). `TAMBRE_SOCKET`
+overrides the daemon socket path.
+
 ## Licence
 
 MIT

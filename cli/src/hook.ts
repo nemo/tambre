@@ -1,7 +1,7 @@
-import net from 'node:net';
-import { spawn } from 'node:child_process';
 import type { CanonicalEvent } from './engine/types.js';
-import { debug, socketPath, type Agent, type HookMessage } from './ipc.js';
+import { debug, type Agent, type HookMessage } from './ipc.js';
+import { connect, spawnDaemon } from './client.js';
+import { resolveSession, resolveVoice } from './config.js';
 
 const CONNECT_RETRY_MS = 100;
 const CONNECT_BUDGET_MS = 2500;
@@ -49,36 +49,35 @@ async function readStdin(timeoutMs = 500): Promise<string> {
   });
 }
 
-function spawnDaemon(): void {
-  const child = spawn(process.execPath, [...process.execArgv, process.argv[1], 'daemon'], {
-    detached: true,
-    stdio: process.env.TAMBRE_DEBUG ? ['ignore', 'inherit', 'inherit'] : 'ignore',
-    windowsHide: true,
-    env: process.env,
-  });
-  child.unref();
-  debug('spawned daemon pid', child.pid);
-}
-
-function tryConnect(path: string): Promise<net.Socket | null> {
-  return new Promise((res) => {
-    const c = net.connect(path);
-    c.once('connect', () => res(c));
-    c.once('error', () => res(null));
-  });
-}
-
 /** Connect, spawning the daemon on first failure, within a short budget. */
-async function connect(path: string, mayStart: boolean): Promise<net.Socket | null> {
+async function connectOrStart(mayStart: boolean) {
   const deadline = Date.now() + CONNECT_BUDGET_MS;
-  let c = await tryConnect(path);
+  let c = await connect({ timeoutMs: 300 });
   if (c || !mayStart) return c;
   spawnDaemon();
   while (!c && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, CONNECT_RETRY_MS));
-    c = await tryConnect(path);
+    c = await connect({ timeoutMs: 300 });
   }
   return c;
+}
+
+/**
+ * Fill in what a session.start needs: the resolved voice, texture, the
+ * project's frame proposal and root. Never throws; on any failure the
+ * daemon falls back to its own defaults.
+ */
+function announce(msg: HookMessage, voiceOverride?: string): void {
+  try {
+    const r = resolveSession(msg.cwd);
+    msg.projectRoot = r.projectRoot;
+    msg.voiceSpec = voiceOverride ? resolveVoice(voiceOverride) : r.voice;
+    msg.texture = r.texture;
+    if (r.frame) msg.frame = r.frame;
+  } catch (e) {
+    debug('resolveSession failed:', String(e));
+    if (voiceOverride) msg.voice = voiceOverride;
+  }
 }
 
 export async function runHook(agent: Agent, opts: { voice?: string } = {}): Promise<void> {
@@ -97,8 +96,9 @@ export async function runHook(agent: Agent, opts: { voice?: string } = {}): Prom
       agent,
       cwd: input.cwd ?? process.cwd(),
       pid: event === 'session.start' ? process.ppid : undefined,
-      voice: opts.voice,
     };
+    if (event === 'session.start') announce(msg, opts.voice);
+    else if (opts.voice) msg.voice = opts.voice;
   } else {
     debug('agent not implemented:', agent);
     return;
@@ -106,7 +106,7 @@ export async function runHook(agent: Agent, opts: { voice?: string } = {}): Prom
 
   // Only a session start (or anything but an end) is worth booting the daemon for.
   const mayStart = msg.event !== 'session.end';
-  const sock = await connect(socketPath(), mayStart);
+  const sock = await connectOrStart(mayStart);
   if (!sock) { debug('no daemon reachable'); return; }
   await new Promise<void>((res) => sock.end(JSON.stringify(msg) + '\n', () => res()));
   debug(`sent ${msg.event} for ${msg.sessionId} in ${Date.now() - t0} ms`);

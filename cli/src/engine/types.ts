@@ -11,6 +11,22 @@ export interface Frame {
 
 export type BellColour = 'glass' | 'wood' | 'soft';
 
+/**
+ * Extra knobs behind the TUI's advanced page. Stored on the voice and carried
+ * through the daemon; the engine applies only what it implements:
+ *   resonance  -> the voice filter's Q (0..1 maps 0.5..4), default 0.7
+ *   attack     -> the voice's entrance time constant when a session starts (seconds)
+ *   release    -> the time constant of the fade to silence on `waiting` (seconds)
+ * `fmRatio` and `reverb` are stored but not yet rendered.
+ */
+export interface VoiceAdvanced {
+  attack?: number;
+  release?: number;
+  resonance?: number;
+  fmRatio?: number;
+  reverb?: number;
+}
+
 /** A voice is what one project sounds like inside the frame. */
 export interface Voice {
   name: string;
@@ -23,6 +39,7 @@ export interface Voice {
   movement: { depth: number; rate: number };
   width: { detune: number; pan: number };
   bell: BellColour;
+  advanced?: VoiceAdvanced;
 }
 
 export type SessionState = 'working' | 'blocked' | 'waiting' | 'ended';

@@ -3,19 +3,43 @@
   "version": "0.1.0-spike",
   "description": "Hear what your coding agent is doing. A synth daemon driven by agent hooks.",
   "type": "module",
-  "keywords": ["sound", "audio", "hooks", "sonification", "ai-agent", "claude-code", "codex"],
+  "keywords": [
+    "sound",
+    "audio",
+    "hooks",
+    "sonification",
+    "ai-agent",
+    "claude-code",
+    "codex"
+  ],
   "author": "nemo",
   "license": "MIT",
   "homepage": "https://nemo.github.io/tambre/",
-  "repository": { "type": "git", "url": "git+https://github.com/nemo/tambre.git", "directory": "cli" },
-  "bugs": { "url": "https://github.com/nemo/tambre/issues" },
-  "bin": { "tambre": "dist/tambre.js" },
-  "files": ["dist/", "README.md", "LICENSE"],
-  "engines": { "node": ">=22" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nemo/tambre.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/nemo/tambre/issues"
+  },
+  "bin": {
+    "tambre": "dist/tambre.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/tambre.ts",
-    "demo": "tsx src/tambre.ts demo"
+    "demo": "tsx src/tambre.ts demo",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "node-web-audio-api": "^2.2.0"
@@ -23,7 +47,10 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "tsx": "^4.23.15",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.4"
   },
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

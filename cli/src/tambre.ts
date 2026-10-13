@@ -5,7 +5,8 @@ import { runHook } from './hook.js';
 import { runDemo } from './demo.js';
 import { claudeCodeHooks } from './hooks-print.js';
 import { PALETTE } from './palette.js';
-import type { Agent } from './ipc.js';
+import { TEXTURE_MODES, type TextureMode } from './engine/texture.js';
+import { debug, type Agent } from './ipc.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
@@ -38,7 +39,12 @@ async function main(): Promise<number> {
       return 0;
     case 'demo': {
       const v = flag('--voices')?.split(',') as [string, string] | undefined;
-      await runDemo({ volume: Number(flag("--volume") ?? 0.8), voices: v, out: flag("--out"), mode: flag("--mode") as never });
+      const mode = flag('--mode') as TextureMode | undefined;
+      if (mode && !TEXTURE_MODES.includes(mode)) {
+        process.stderr.write(`unknown --mode "${mode}"; one of ${TEXTURE_MODES.join(', ')}\n`);
+        return 1;
+      }
+      await runDemo({ volume: Number(flag('--volume') ?? 0.8), voices: v, out: flag('--out'), mode });
       return 0;
     }
     case 'daemon':
@@ -72,7 +78,9 @@ async function main(): Promise<number> {
 }
 
 main().then((code) => { process.exitCode = code; }, (e) => {
+  // hook and daemon never print; hooks never fail the agent either.
   if (cmd === 'hook') { process.exitCode = 0; return; }
+  if (cmd === 'daemon') { debug('daemon failed:', String(e?.stack ?? e)); process.exitCode = 1; return; }
   process.stderr.write(String(e?.stack ?? e) + '\n');
   process.exitCode = 1;
 });

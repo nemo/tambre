@@ -7,31 +7,54 @@ import { Texture, type TextureMode } from './texture.js';
 const GLIDE = 0.06; // time constant; ~0.2 s to settle
 const PAIR_GAIN = 0.11; // per pad pair at full, before the filter
 const TEETH_GAIN = 0.06;
+/** Time constant of the fade-out before a graph rebuild; ~0.3 s to silence. */
+const SWAP_FADE_TC = 0.08;
+const SWAP_FADE_MS = 300;
 
 const cutoffFor = (brightness: number) => 320 + brightness * 1200;
+const qFor = (v: Voice) => {
+  const r = v.advanced?.resonance;
+  return typeof r === 'number' ? 0.5 + Math.min(1, Math.max(0, r)) * 3.5 : 0.7;
+};
 
 interface PadPair {
   oscs: { osc: OscillatorNode; g: GainNode; rung: number }[];
   gain: GainNode;
 }
 
+/** The part of the graph that is rebuilt when the voice or texture changes. */
+interface Graph {
+  gain: GainNode;
+  filter: BiquadFilterNode;
+  lfo: OscillatorNode;
+  lfoDepth: GainNode;
+  pairs: PadPair[];
+  teeth: { oscs: OscillatorNode[]; filter: BiquadFilterNode; gain: GainNode };
+  texture: Texture;
+  mode: TextureMode;
+}
+
 /**
  * One session's sound inside the frame: two detunable pad pairs, a saw
  * "teeth" layer for tension, a filter, a pan, and its own bell colour.
+ *
+ *   pairs -> filter -> gain (state) -> pan -> mute -> out
+ *   teeth ------------^                 ^
+ *   bells, texture grains ---------------'
+ *
+ * Everything from `gain` down is a Graph that setVoice/setTexture rebuild in
+ * place: the old graph fades out over 0.3 s, the new one fades in after it.
  */
 export class SessionVoice {
   state: SessionState = 'working';
-  private pairs: PadPair[] = [];
-  private teeth!: { oscs: OscillatorNode[]; filter: BiquadFilterNode; gain: GainNode };
-  private filter: BiquadFilterNode;
-  private gain: GainNode; // voice level (state)
+  muted = false;
+  private g!: Graph;
   private pan: StereoPannerNode;
-  private lfo: OscillatorNode;
-  private lfoDepth: GainNode;
+  private muteGain: GainNode;
   private activityTimer: NodeJS.Timeout | null = null;
+  private swapTimer: NodeJS.Timeout | null = null;
   private unsubChord: () => void;
   private stopped = false;
-  private texture: Texture;
   private lastActivity = -Infinity;
 
   constructor(
@@ -40,58 +63,79 @@ export class SessionVoice {
     private harmony: Harmony,
     public voice: Voice,
     /** Which rung of the ladder this session sits on. */
-    private rung: number,
-    public mode: TextureMode = 'drone',
+    readonly rung: number,
+    public texture: TextureMode = 'drone',
   ) {
     const now = ctx.currentTime;
 
+    this.muteGain = ctx.createGain();
+    this.muteGain.gain.value = 1;
+    this.muteGain.connect(out);
+
     this.pan = ctx.createStereoPanner();
     this.pan.pan.value = voice.width.pan;
-    this.pan.connect(out);
+    this.pan.connect(this.muteGain);
 
-    this.gain = ctx.createGain();
-    this.gain.gain.value = 0;
-    this.gain.connect(this.pan);
+    this.g = this.build(texture);
+    this.unsubChord = harmony.onChord(() => this.retune());
+    this.g.gain.gain.setTargetAtTime(1, now, this.voice.advanced?.attack ?? 0.35);
+  }
 
-    this.filter = ctx.createBiquadFilter();
-    this.filter.type = 'lowpass';
-    this.filter.Q.value = 0.7;
-    this.filter.frequency.value = cutoffFor(voice.brightness);
-    this.filter.connect(this.gain);
+  get mode(): TextureMode {
+    return this.texture;
+  }
+
+  // ---- graph ----
+
+  private build(mode: TextureMode): Graph {
+    const ctx = this.ctx;
+    const voice = this.voice;
+    const now = ctx.currentTime;
+
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(this.pan);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = qFor(voice);
+    filter.frequency.value = cutoffFor(voice.brightness);
+    filter.connect(gain);
 
     // Movement: one slow LFO on the cutoff, scaled by depth.
-    this.lfo = ctx.createOscillator();
-    this.lfo.type = 'sine';
-    this.lfo.frequency.value = voice.movement.rate;
-    this.lfoDepth = ctx.createGain();
-    this.lfoDepth.gain.value = voice.movement.depth * 300;
-    this.lfo.connect(this.lfoDepth);
-    this.lfoDepth.connect(this.filter.frequency);
-    this.lfo.start(now);
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = voice.movement.rate;
+    const lfoDepth = ctx.createGain();
+    lfoDepth.gain.value = voice.movement.depth * 300;
+    lfo.connect(lfoDepth);
+    lfoDepth.connect(filter.frequency);
+    lfo.start(now);
 
-    this.pairs.push(this.makePair(0, this.rung));
-    this.pairs.push(this.makePair(1, this.rung + 1));
-    // drone: pair 0 always up. hum: pair 0 at a whisper. others: pads only swell on demand.
-    this.pairs[0].gain.gain.value = mode === 'drone' ? 1 : mode === 'hum' || mode === 'hush' ? 0.25 : 0;
-    this.pairs[1].gain.gain.value = 0; // second pair rises with activity (drone only)
-    if (mode === 'hum' || mode === 'hush') this.filter.frequency.value = 400;
-    this.texture = new Texture({
-      ctx, out: this.pan, harmony, voice, rung,
-      pad: (level, tc) => this.pairs[0].gain.gain.setTargetAtTime(mode === 'hush' ? Math.max(level, 0.25) : level, this.ctx.currentTime, tc),
-      isWorking: () => this.state === 'working' && !this.stopped,
+    const pairs = [this.makePair(0, this.rung, filter), this.makePair(1, this.rung + 1, filter)];
+    // drone: pair 0 always up. hum/hush: pair 0 at a whisper. others: pads only swell on demand.
+    pairs[0].gain.gain.value = mode === 'drone' ? 1 : mode === 'hum' || mode === 'hush' ? 0.25 : 0;
+    pairs[1].gain.gain.value = 0; // second pair rises with activity (drone only)
+    if (mode === 'hum' || mode === 'hush') filter.frequency.value = 400;
+
+    // The texture loop drives *this* build's pad only, so a swell that is
+    // still decaying when the graph is swapped cannot touch the new one.
+    const pad0 = pairs[0].gain.gain;
+    const texture: Texture = new Texture({
+      ctx, out: this.pan, harmony: this.harmony, voice, rung: this.rung,
+      pad: (level, tc) => pad0.setTargetAtTime(mode === 'hush' ? Math.max(level, 0.25) : level, this.ctx.currentTime, tc),
+      isWorking: (): boolean => this.state === 'working' && !this.stopped && this.g?.texture === texture,
       sinceActivity: () => this.ctx.currentTime - this.lastActivity,
     }, mode);
 
-    this.makeTeeth();
-
-    this.unsubChord = harmony.onChord(() => this.retune());
-    this.gain.gain.setTargetAtTime(1, now, 0.35);
+    const teeth = this.makeTeeth(gain);
+    return { gain, filter, lfo, lfoDepth, pairs, teeth, texture, mode };
   }
 
-  private makePair(i: number, rung: number): PadPair {
+  private makePair(i: number, rung: number, filter: BiquadFilterNode): PadPair {
     const ctx = this.ctx;
     const pairGain = ctx.createGain();
-    pairGain.connect(this.filter);
+    pairGain.connect(filter);
     const base = this.voice.width.detune;
     const detunes = [-(base - 1) - i * 1.8, base + i * 2.4];
     const oscs: PadPair['oscs'] = [];
@@ -113,7 +157,7 @@ export class SessionVoice {
     return { oscs, gain: pairGain };
   }
 
-  private makeTeeth(): void {
+  private makeTeeth(into: GainNode): Graph['teeth'] {
     const ctx = this.ctx;
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -122,7 +166,7 @@ export class SessionVoice {
     const gain = ctx.createGain();
     gain.gain.value = 0;
     filter.connect(gain);
-    gain.connect(this.gain);
+    gain.connect(into);
     const oscs: OscillatorNode[] = [];
     for (const d of [-6, 7]) {
       const osc = ctx.createOscillator();
@@ -136,18 +180,76 @@ export class SessionVoice {
       osc.start();
       oscs.push(osc);
     }
-    this.teeth = { oscs, filter, gain };
+    return { oscs, filter, gain };
+  }
+
+  /** Stop every source of a graph at `at` and drop it from the pan shortly after. */
+  private release(g: Graph, at: number): void {
+    g.texture.stop();
+    for (const p of g.pairs) for (const o of p.oscs) o.osc.stop(at);
+    for (const o of g.teeth.oscs) o.stop(at);
+    g.lfo.stop(at);
+    const ms = Math.max(0, (at - this.ctx.currentTime) * 1000) + 100;
+    setTimeout(() => { try { g.gain.disconnect(); } catch { /* already gone */ } }, ms).unref();
   }
 
   private retune(): void {
     const now = this.ctx.currentTime;
-    for (const p of this.pairs) {
+    for (const p of this.g.pairs) {
       for (const o of p.oscs) {
         o.osc.frequency.setTargetAtTime(this.harmony.chordFreq(o.rung, this.voice.register), now, GLIDE);
       }
     }
-    for (const o of this.teeth.oscs) {
+    for (const o of this.g.teeth.oscs) {
       o.frequency.setTargetAtTime(this.harmony.chordFreq(this.rung, this.voice.register - 1), now, GLIDE);
+    }
+  }
+
+  // ---- live changes ----
+
+  /** Swap the voice without a click: fade out 0.3 s, rebuild, fade back into the current state. */
+  setVoice(voice: Voice): void {
+    this.voice = voice;
+    if (this.stopped) return;
+    this.pan.pan.setTargetAtTime(voice.width.pan, this.ctx.currentTime, 0.1);
+    this.rebuild(this.texture);
+  }
+
+  /** Change how the working state sounds, same fade. */
+  setTexture(mode: TextureMode): void {
+    if (mode === this.texture) return;
+    this.texture = mode;
+    if (this.stopped) return;
+    this.rebuild(mode);
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    this.muteGain.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.05);
+  }
+
+  private rebuild(mode: TextureMode): void {
+    const now = this.ctx.currentTime;
+    const old = this.g;
+    if (this.activityTimer) { clearTimeout(this.activityTimer); this.activityTimer = null; }
+    if (this.swapTimer) { clearTimeout(this.swapTimer); this.swapTimer = null; }
+    old.gain.gain.setTargetAtTime(0, now, SWAP_FADE_TC);
+    this.release(old, now + SWAP_FADE_MS / 1000 + 0.1);
+    this.g = this.build(mode);
+    this.swapTimer = setTimeout(() => {
+      this.swapTimer = null;
+      if (this.stopped) return;
+      this.restoreState();
+    }, SWAP_FADE_MS);
+  }
+
+  /** Bring a freshly built graph up to whatever state the session is in. */
+  private restoreState(): void {
+    switch (this.state) {
+      case 'working': this.working(); if (this.ctx.currentTime - this.lastActivity < 4) this.activity(); break;
+      case 'blocked': this.blocked(); break;
+      case 'waiting': this.waiting(); break;
+      case 'ended': break;
     }
   }
 
@@ -157,10 +259,10 @@ export class SessionVoice {
     if (this.stopped) return;
     const now = this.ctx.currentTime;
     this.state = 'working';
-    this.gain.gain.setTargetAtTime(1, now, 0.3);
-    this.teeth.gain.gain.setTargetAtTime(0, now, 0.25);
-    if (this.mode === 'drone') this.filter.frequency.setTargetAtTime(cutoffFor(this.voice.brightness), now, 0.4);
-    this.texture.start();
+    this.g.gain.gain.setTargetAtTime(1, now, 0.3);
+    this.g.teeth.gain.gain.setTargetAtTime(0, now, 0.25);
+    if (this.g.mode === 'drone') this.g.filter.frequency.setTargetAtTime(cutoffFor(this.voice.brightness), now, 0.4);
+    this.g.texture.start();
   }
 
   /** A tool ran. Thicken: second pair up, cutoff up, decays after 4 s of quiet. */
@@ -169,15 +271,17 @@ export class SessionVoice {
     if (this.state === 'blocked' || this.state === 'waiting') this.working();
     const now = this.ctx.currentTime;
     this.lastActivity = now;
-    if (this.mode !== 'drone') return;
-    this.pairs[1].gain.gain.setTargetAtTime(1, now, 0.25);
-    this.filter.frequency.setTargetAtTime(cutoffFor(Math.min(1, this.voice.brightness + 0.3)), now, 0.3);
+    if (this.g.mode !== 'drone') return;
+    const g = this.g;
+    g.pairs[1].gain.gain.setTargetAtTime(1, now, 0.25);
+    g.filter.frequency.setTargetAtTime(cutoffFor(Math.min(1, this.voice.brightness + 0.3)), now, 0.3);
     if (this.activityTimer) clearTimeout(this.activityTimer);
     this.activityTimer = setTimeout(() => {
-      if (this.stopped) return;
+      this.activityTimer = null;
+      if (this.stopped || this.g !== g) return;
       const t = this.ctx.currentTime;
-      this.pairs[1].gain.gain.setTargetAtTime(0, t, 0.6);
-      if (this.state === 'working') this.filter.frequency.setTargetAtTime(cutoffFor(this.voice.brightness), t, 0.6);
+      g.pairs[1].gain.gain.setTargetAtTime(0, t, 0.6);
+      if (this.state === 'working') g.filter.frequency.setTargetAtTime(cutoffFor(this.voice.brightness), t, 0.6);
     }, 4000);
   }
 
@@ -185,11 +289,11 @@ export class SessionVoice {
     if (this.stopped) return;
     const now = this.ctx.currentTime;
     this.state = 'blocked';
-    this.texture.stop();
-    this.gain.gain.setTargetAtTime(1, now, 0.3);
-    this.teeth.gain.gain.setTargetAtTime(1, now, 0.4);
-    this.teeth.filter.frequency.setTargetAtTime(240 + this.voice.brightness * 780, now, 0.5);
-    this.filter.frequency.setTargetAtTime(cutoffFor(Math.min(1, this.voice.brightness + 0.2)), now, 0.5);
+    this.g.texture.stop();
+    this.g.gain.gain.setTargetAtTime(1, now, 0.3);
+    this.g.teeth.gain.gain.setTargetAtTime(1, now, 0.4);
+    this.g.teeth.filter.frequency.setTargetAtTime(240 + this.voice.brightness * 780, now, 0.5);
+    this.g.filter.frequency.setTargetAtTime(cutoffFor(Math.min(1, this.voice.brightness + 0.2)), now, 0.5);
   }
 
   /** Settle to silence within ~3 s. */
@@ -197,9 +301,9 @@ export class SessionVoice {
     if (this.stopped) return;
     const now = this.ctx.currentTime;
     this.state = 'waiting';
-    this.texture.stop();
-    this.teeth.gain.gain.setTargetAtTime(0, now, 0.3);
-    this.gain.gain.setTargetAtTime(0, now, 0.7);
+    this.g.texture.stop();
+    this.g.teeth.gain.gain.setTargetAtTime(0, now, 0.3);
+    this.g.gain.gain.setTargetAtTime(0, now, this.voice.advanced?.release ?? 0.7);
   }
 
   /** Stop all sources after the tail and drop the graph. */
@@ -207,16 +311,13 @@ export class SessionVoice {
     if (this.stopped) return;
     this.stopped = true;
     this.state = 'ended';
-    this.texture.stop();
     const now = this.ctx.currentTime;
     this.unsubChord();
     if (this.activityTimer) clearTimeout(this.activityTimer);
-    this.gain.gain.setTargetAtTime(0, now, 0.5);
-    const stopAt = now + tailSeconds;
-    for (const p of this.pairs) for (const o of p.oscs) o.osc.stop(stopAt);
-    for (const o of this.teeth.oscs) o.stop(stopAt);
-    this.lfo.stop(stopAt);
-    setTimeout(() => this.pan.disconnect(), (tailSeconds + 0.5) * 1000);
+    if (this.swapTimer) clearTimeout(this.swapTimer);
+    this.g.gain.gain.setTargetAtTime(0, now, 0.5);
+    this.release(this.g, now + tailSeconds);
+    setTimeout(() => { try { this.muteGain.disconnect(); } catch { /* gone */ } }, (tailSeconds + 0.5) * 1000).unref();
   }
 
   // ---- one-shots, all on the ladder, all in this voice's bell colour ----
