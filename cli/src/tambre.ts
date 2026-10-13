@@ -24,7 +24,8 @@ const HELP = `
   Hear what your coding agent is doing.
 
     tambre demo [--mode drone|breath|pulse|rain|hum|hush|none] [--voices moss,brass] [--out demo.wav]
-    tambre daemon                                     run the resident synth (hooks start it for you)
+    tambre daemon [--foreground]                      run the resident synth (hooks start it for you);
+                                                      --foreground logs to stderr and never idles out
     tambre hook claude-code [--voice <name>]          hook entry point; reads the agent's JSON on stdin
     tambre hooks print claude-code [--command <cmd>]  JSON hooks block for ~/.claude/settings.json
     tambre voices                                     list the built-in voice palette
@@ -47,9 +48,13 @@ async function main(): Promise<number> {
       await runDemo({ volume: Number(flag('--volume') ?? 0.8), voices: v, out: flag('--out'), mode });
       return 0;
     }
-    case 'daemon':
-      await runDaemon();
+    case 'daemon': {
+      // --foreground: log to stderr and stay up with no sessions, for debugging.
+      const foreground = argv.includes('--foreground');
+      if (foreground) process.env.TAMBRE_DEBUG = process.env.TAMBRE_DEBUG || '1';
+      await runDaemon({ foreground });
       return 0; // never reached; daemon exits itself
+    }
     case 'hook': {
       const agent = (argv[1] ?? 'claude-code') as Agent;
       try { await runHook(agent, { voice: flag('--voice') }); } catch { /* never fail the agent */ }
