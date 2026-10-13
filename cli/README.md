@@ -68,6 +68,23 @@ it falls back to defaults with warnings.
 Texture (`drone`, `breath`, `pulse`, `rain`, `hum`, `hush`, `none`) is per
 session: the project texture wins, else the user default (`hush`).
 
+## TUI
+
+Bare `tambre` opens the one-screen editor (needs a terminal; it starts the
+daemon if none is running and leaves it running on quit). Left: the palette
+and saved patches (`j`/`k`, Enter loads one). Centre: the loaded voice's
+macros as sliders (Tab/Shift-Tab to focus, `h`/`l` to adjust; `a` flips to
+the advanced page: attack, release, resonance, fm ratio, reverb; the engine
+renders the first three, the last two are stored on the voice only). The
+texture slider cycles through every mode. Audition keys `1`-`6` play
+session.start, turn.end, permission.request, turn.fail, session.end and
+compact; `w`, `b`, `i` hold the working, blocked and waiting states. Every
+preview is played by the daemon. Right: live sessions (`J`/`K` to pick, `m`
+to mute one, `p` to push the edited voice and texture onto it live), `M`
+mutes everything, `+`/`-` set the volume. `s` saves the edit as the project
+voice (`tambre.json`) when run inside a project, else as the user default;
+`S` saves it as a named patch. `q` quits.
+
 ## Development
 
 ```sh
