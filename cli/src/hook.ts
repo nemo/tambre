@@ -1,41 +1,17 @@
-import type { CanonicalEvent } from './engine/types.js';
 import { debug, type Agent, type HookMessage } from './ipc.js';
 import { connect, spawnDaemon } from './client.js';
 import { resolveSession, resolveVoice } from './config.js';
+import { getAdapter } from './adapters/index.js';
+import type { ParsedHook } from './adapters/types.js';
+
+/**
+ * `tambre hook <agent>`: read the agent's native JSON payload from stdin, map
+ * it through the agent's adapter to a canonical event, connect to (or spawn)
+ * the daemon, write one line, exit. Never prints, never throws out.
+ */
 
 const CONNECT_RETRY_MS = 100;
 const CONNECT_BUDGET_MS = 2500;
-
-/** Claude Code hook payload, the fields we read. */
-interface ClaudeHookInput {
-  hook_event_name: string;
-  session_id: string;
-  cwd?: string;
-  notification_type?: string;
-  tool_name?: string;
-}
-
-export function mapClaudeCode(input: ClaudeHookInput): CanonicalEvent | null {
-  switch (input.hook_event_name) {
-    case 'SessionStart': return 'session.start';
-    case 'SessionEnd': return 'session.end';
-    case 'UserPromptSubmit': return 'working';
-    case 'PreToolUse':
-    case 'PostToolUse': return 'activity';
-    case 'PermissionRequest': return 'permission.request';
-    case 'Stop': return 'turn.end';
-    case 'StopFailure': return 'turn.fail';
-    case 'PreCompact': return 'compact';
-    case 'Notification':
-      switch (input.notification_type) {
-        case 'permission_prompt': return 'permission.request';
-        case 'idle_prompt':
-        case 'agent_completed': return 'waiting';
-        default: return null;
-      }
-    default: return null;
-  }
-}
 
 async function readStdin(timeoutMs = 500): Promise<string> {
   if (process.stdin.isTTY) return '';
@@ -80,34 +56,41 @@ function announce(msg: HookMessage, voiceOverride?: string): void {
   }
 }
 
+/** Turn a parsed native payload into the message the daemon takes. Pure; used by tests. */
+export function buildHookMessage(agent: Agent, parsed: ParsedHook, opts: { voice?: string; cwd?: string; ppid?: number } = {}): HookMessage {
+  const msg: HookMessage = {
+    event: parsed.event,
+    sessionId: parsed.sessionId,
+    agent,
+    cwd: parsed.cwd ?? opts.cwd ?? process.cwd(),
+    pid: parsed.event === 'session.start' ? (opts.ppid ?? process.ppid) : undefined,
+  };
+  if (parsed.event === 'session.start') announce(msg, opts.voice);
+  else if (opts.voice) msg.voice = opts.voice;
+  return msg;
+}
+
 export async function runHook(agent: Agent, opts: { voice?: string } = {}): Promise<void> {
   const t0 = Date.now();
-  const raw = await readStdin();
-  let msg: HookMessage | null = null;
+  const adapter = getAdapter(agent);
+  if (!adapter) { debug('agent not implemented:', agent); return; }
 
-  if (agent === 'claude-code') {
-    let input: ClaudeHookInput;
-    try { input = JSON.parse(raw); } catch { debug('no/invalid stdin'); return; }
-    const event = mapClaudeCode(input);
-    if (!event) { debug('ignored', input.hook_event_name, input.notification_type ?? ''); return; }
-    msg = {
-      event,
-      sessionId: input.session_id,
-      agent,
-      cwd: input.cwd ?? process.cwd(),
-      pid: event === 'session.start' ? process.ppid : undefined,
-    };
-    if (event === 'session.start') announce(msg, opts.voice);
-    else if (opts.voice) msg.voice = opts.voice;
-  } else {
-    debug('agent not implemented:', agent);
+  const raw = await readStdin();
+  let input: unknown;
+  try { input = JSON.parse(raw); } catch { debug('no/invalid stdin'); return; }
+
+  const parsed = adapter.parse(input);
+  if (!parsed) {
+    const name = typeof input === 'object' && input ? String((input as { hook_event_name?: unknown }).hook_event_name ?? '?') : '?';
+    debug('ignored', agent, name);
     return;
   }
+  const msg = buildHookMessage(agent, parsed, { voice: opts.voice });
 
   // Only a session start (or anything but an end) is worth booting the daemon for.
   const mayStart = msg.event !== 'session.end';
   const sock = await connectOrStart(mayStart);
   if (!sock) { debug('no daemon reachable'); return; }
   await new Promise<void>((res) => sock.end(JSON.stringify(msg) + '\n', () => res()));
-  debug(`sent ${msg.event} for ${msg.sessionId} in ${Date.now() - t0} ms`);
+  debug(`sent ${msg.event} for ${msg.sessionId} (${parsed.nativeEvent}) in ${Date.now() - t0} ms`);
 }

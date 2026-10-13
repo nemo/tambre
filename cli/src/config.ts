@@ -397,17 +397,21 @@ function gitToplevel(cwd: string): string | null {
 
 /**
  * Nearest ancestor of cwd (inclusive) holding tambre.json, else the git
- * toplevel, else cwd itself. Always absolute.
+ * toplevel, else cwd itself. Always absolute, with symlinks resolved so that
+ * a root recorded by a hook (given the agent's cwd) compares equal to one
+ * resolved from process.cwd() (which macOS reports under /private/tmp, etc.).
  */
 export function findProjectRoot(cwd: string = process.cwd()): string {
   let dir = path.resolve(cwd);
+  let found: string | null = null;
   for (;;) {
-    if (fs.existsSync(path.join(dir, PROJECT_FILE))) return dir;
+    if (fs.existsSync(path.join(dir, PROJECT_FILE))) { found = dir; break; }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  return gitToplevel(cwd) ?? path.resolve(cwd);
+  const root = found ?? gitToplevel(cwd) ?? path.resolve(cwd);
+  try { return fs.realpathSync(root); } catch { return root; }
 }
 
 // ---- resolution ----

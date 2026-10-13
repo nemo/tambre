@@ -7,21 +7,51 @@ layer while it waits on a permission prompt, and a bell when a turn ends.
 Every project gets its own voice in a shared key, so with two sessions running
 you can hear which one stopped.
 
-**Status: spike.** Engine, daemon, and the Claude Code hook client work end
-to end on macOS. No TUI, no `install` command, no Codex adapter yet. See
-`../spec/tambre-spec.md`.
+**Status: M1 in progress.** Engine, daemon, hook clients for Claude Code and
+Codex, `install`/`uninstall`, `status`, `mute`, `volume`, `doctor`. The TUI
+(M2) is a separate piece of work; bare `tambre` says "TUI not built" until it
+lands. See `../spec/tambre-spec.md`.
 
 ```sh
 npm install && npm run build
-node dist/tambre.js demo            # 40 s audition: two sessions, two voices
-node dist/tambre.js voices          # the built-in palette
-node dist/tambre.js hooks print claude-code --command "node $PWD/dist/tambre.js hook claude-code"
+node dist/tambre.js install          # in a git repo: tambre.json + local hooks for Claude Code and Codex
+node dist/tambre.js install --user   # hooks in ~/.claude/settings.json and ~/.codex/hooks.json instead
+node dist/tambre.js status           # live sessions, states, voices, frame
+node dist/tambre.js doctor           # device, daemon, config, hooks, palette
+node dist/tambre.js demo             # 40 s audition: two sessions, two voices
 ```
 
-Merge the printed `hooks` block into `~/.claude/settings.json`. Hooks spawn the
-daemon on the first `SessionStart` and it exits by itself after the last
-session ends. `TAMBRE_DEBUG=1` prints daemon and hook logs to stderr; without
-it nothing is ever printed.
+`install` writes the absolute path of the binary into each hook command
+(`node /abs/dist/tambre.js hook <agent>`), marks every entry it adds with
+`"tambre": true` so `uninstall` can remove exactly those, and is idempotent.
+Inside a git repo the hooks go to `.claude/settings.local.json` and
+`.codex/hooks.json`, both added to `.git/info/exclude`; the committed
+`.claude/settings.json` is never touched. Codex asks you to trust new hooks
+with `/hooks` before they run.
+
+Hooks spawn the daemon on the first `SessionStart` and it exits by itself
+after the last session ends. `TAMBRE_DEBUG=1` prints daemon and hook logs to
+stderr; without it `hook` and `daemon` never print.
+
+```
+tambre                       TUI (M2)
+tambre install [--agent claude-code|codex|all] [--user | --project] [--voice <name>] [--texture <mode>]
+tambre uninstall [--agent …] [--user | --project] [--purge]
+tambre status [--json]
+tambre mute [--here] / tambre unmute [--here]
+tambre volume <0..1>
+tambre doctor
+tambre voices
+tambre hooks print <agent> [--command <cmd>]
+tambre demo [--mode …] [--voices a,b] [--out f.wav]
+tambre hook <agent>          hook entry point (stdin → daemon)
+tambre daemon
+```
+
+Adapters live in `src/adapters/`. Codex hook file shape and payload fields
+follow https://learn.chatgpt.com/docs/hooks (checked 2026-10-12): Codex has no
+`Notification` or `StopFailure` event; `Interrupt` maps to `waiting`;
+`SessionEnd` runs synchronously with a 3 s cap.
 
 Requires Node 22+. Audio output is `node-web-audio-api` (prebuilt for macOS,
 Linux, and Windows on x64 and arm64).
