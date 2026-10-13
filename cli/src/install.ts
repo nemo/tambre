@@ -10,6 +10,7 @@ import {
 } from './config.js';
 import type { TextureMode } from './engine/texture.js';
 import { voiceByName } from './palette.js';
+import { installSkill, uninstallSkill, type SkillChange } from './skills/index.js';
 
 /**
  * `tambre install` / `tambre uninstall`.
@@ -51,6 +52,8 @@ export interface InstallReport {
   /** 'skipped' when tambre.json exists but is not JSON; `reason` says so and nothing is written. */
   projectFile?: { path: string; result: 'written' | 'updated' | 'unchanged' | 'skipped'; voice: string; texture?: TextureMode; reason?: string };
   files: FileChange[];
+  /** The agent skill copied into the project (project scope only). */
+  skills: SkillChange[];
   notes: string[];
   warnings: string[];
 }
@@ -67,6 +70,7 @@ export interface UninstallReport {
   scope: InstallScope;
   root: string;
   files: FileChange[];
+  skills: SkillChange[];
   projectFile?: { path: string; result: 'removed' | 'kept' | 'absent' };
   warnings: string[];
 }
@@ -273,7 +277,7 @@ export function install(opts: InstallOpts): InstallReport {
   const cwd = opts.cwd ?? process.cwd();
   const scope = opts.scope ?? defaultScope(cwd);
   const root = findProjectRoot(cwd);
-  const report: InstallReport = { scope, root, files: [], notes: [], warnings: [] };
+  const report: InstallReport = { scope, root, files: [], skills: [], notes: [], warnings: [] };
 
   const voiceArg = opts.voice;
   if (voiceArg !== undefined && !voiceByName(voiceArg)) {
@@ -316,6 +320,13 @@ export function install(opts: InstallOpts): InstallReport {
       if (gitExclude(root, rel)) report.notes.push(`Added ${rel} to .git/info/exclude so it is never committed.`);
     }
     for (const n of adapter.postInstallNotes(scope)) if (!report.notes.includes(n)) report.notes.push(n);
+  }
+  if (scope === 'project') {
+    for (const adapter of opts.adapters) {
+      const c = installSkill(adapter.agent, root);
+      if (c.result === 'skipped' && !c.path) continue; // agent has no skill directory
+      report.skills.push(c);
+    }
   }
   return report;
 }
@@ -375,7 +386,17 @@ export function uninstall(opts: UninstallOpts): UninstallReport {
   const cwd = opts.cwd ?? process.cwd();
   const scope = opts.scope ?? defaultScope(cwd);
   const root = findProjectRoot(cwd);
-  const report: UninstallReport = { scope, root, files: [], warnings: [] };
+  const report: UninstallReport = { scope, root, files: [], skills: [], warnings: [] };
+
+  // The skill copy goes first: it lives under the same .claude/.agents
+  // directory as the settings file, which can only be removed once empty.
+  if (scope === 'project') {
+    for (const adapter of opts.adapters) {
+      const c = uninstallSkill(adapter.agent, root);
+      if (c.result === 'skipped' && !c.path) continue;
+      if (c.result !== 'absent') report.skills.push(c);
+    }
+  }
 
   const created = loadUserConfig().createdFiles;
   for (const adapter of opts.adapters) {

@@ -11,6 +11,7 @@ import { debug, type Agent } from './ipc.js';
 import { ADAPTERS, adaptersFor, getAdapter } from './adapters/index.js';
 import { install, uninstall, type InstallReport, type UninstallReport } from './install.js';
 import { doctor, formatCheck } from './doctor.js';
+import { cmdFrame, cmdShow, cmdTexture, cmdVoice } from './commands/set.js';
 import { send, status, DaemonError } from './client.js';
 import { ConfigError, findProjectRoot, loadUserConfig, saveUserConfig } from './config.js';
 import type { InstallScope } from './adapters/types.js';
@@ -43,6 +44,10 @@ const HELP = `
     tambre volume <0..1>
     tambre doctor                                     device, daemon, config, hooks, palette
     tambre voices                                     the built-in palette and your saved patches
+    tambre show [--json]                              the effective voice, texture, frame, volume here
+    tambre voice <name|json> [--project | --user]     set this project's voice (or your default)
+    tambre texture <mode> [--project | --user]        set this project's texture (or your default)
+    tambre frame [--root G2] [--voicings dusk] [--bpm 60] [--chord-bars 4] [--volume 0.8] [--project]
     tambre hooks print <agent> [--command <cmd>]      the JSON block install would write
     tambre demo [--mode ${TEXTURE_MODES.join('|')}] [--voices moss,brass] [--out demo.wav]
     tambre hook <agent>                               hook entry point; reads the agent's JSON on stdin
@@ -74,6 +79,10 @@ function printInstall(r: InstallReport): void {
     out(`  ${verb.padEnd(9)} ${f.path}  [${f.agent}]${f.reason ? `  ${f.reason}` : ''}\n`);
   }
   for (const w of r.warnings) out(`  warning  ${w}\n`);
+  for (const sk of r.skills) {
+    const verb = sk.result === 'written' ? 'wrote' : sk.result === 'unchanged' ? 'kept' : sk.result;
+    out(`  ${verb.padEnd(9)} ${sk.path}  [${sk.agent} skill]${sk.reason ? `  ${sk.reason}` : ''}\n`);
+  }
   for (const n of r.notes) out(`  note     ${n}\n`);
   if (r.projectFile?.result === 'written') out(`  Commit ${path.basename(r.projectFile.path)}; teammates opt in with \`tambre install\`.\n`);
 }
@@ -84,6 +93,7 @@ function printUninstall(r: UninstallReport): void {
     const verb = f.result === 'written' ? 'cleaned' : f.result === 'removed' ? 'removed' : f.result === 'unchanged' ? 'kept' : f.result;
     out(`  ${verb.padEnd(9)} ${f.path}  [${f.agent}]${f.reason ? `  ${f.reason}` : ''}\n`);
   }
+  for (const sk of r.skills) out(`  ${sk.result.padEnd(9)} ${sk.path}  [${sk.agent} skill]${sk.reason ? `  ${sk.reason}` : ''}\n`);
   if (r.projectFile) out(`  ${r.projectFile.result.padEnd(9)} ${r.projectFile.path}${r.projectFile.result === 'kept' ? '  (pass --purge to delete it)' : ''}\n`);
 }
 
@@ -223,6 +233,14 @@ async function main(): Promise<number> {
     }
     case 'voices':
       return cmdVoices();
+    case 'show':
+      return cmdShow(argv, { out, err });
+    case 'voice':
+      return cmdVoice(argv, { out, err });
+    case 'texture':
+      return cmdTexture(argv, { out, err });
+    case 'frame':
+      return cmdFrame(argv, { out, err });
 
     case 'hooks': {
       const agent = argv[2];
