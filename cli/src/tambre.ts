@@ -68,9 +68,11 @@ async function main(): Promise<number> {
         process.stdout.write(`${v.name.padEnd(7)} timbre ${v.timbre.toFixed(2)}  reg ${String(v.register).padStart(2)}  bright ${v.brightness.toFixed(2)}  pan ${v.width.pan.toFixed(2).padStart(5)}  bell ${v.bell}\n`);
       }
       return 0;
-    case undefined: case '--help': case '-h':
+    case undefined:
+      return (await import('./tui/index.js')).runTui();
+    case '--help': case '-h':
       process.stdout.write(HELP);
-      return cmd ? 0 : 1;
+      return 0;
     default:
       process.stdout.write(HELP);
       return 1;
