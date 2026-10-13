@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { CanonicalEvent, Frame, SessionState, Voice } from './engine/types.js';
@@ -90,6 +91,27 @@ export function pidPath(): string {
     return path.join(process.env.TEMP || os.tmpdir(), `tambre-${os.userInfo().username}.pid`);
   }
   return socketPath().replace(/\.sock$/, '.pid');
+}
+
+/** The pid recorded in a daemon pid file, or null when there is none or it is garbage. */
+export function readPidFile(file: string = pidPath()): number | null {
+  try {
+    const n = Number.parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when a process with this pid exists (it may belong to someone else). */
+export function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM: it exists but is not ours to signal, which still means alive.
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
 }
 
 export const debug = (...args: unknown[]): void => {

@@ -6,6 +6,7 @@ import { SessionVoice } from './voice.js';
 import { bell } from './bell.js';
 import { DEFAULT_FRAME, type CanonicalEvent, type Frame, type SessionState, type Voice } from './types.js';
 import type { TextureMode } from './texture.js';
+import { fadeTo, MUTE_FADE_S } from './fade.js';
 
 export interface EngineOpts {
   frame?: Frame;
@@ -19,6 +20,8 @@ export interface EngineOpts {
 
 const SUB_DRONE = 0.045;
 const SUB_WHISPER = 0.03;
+/** Lowest rung a preview voice may sit on. */
+const PREVIEW_RUNG = 6;
 
 /**
  * Owns the one AudioContext. Master chain: bed floor (two incommensurate
@@ -43,9 +46,9 @@ export class Engine {
   private chordBed!: { oscs: { osc: OscillatorNode; tone: number }[]; gain: GainNode };
   private lfos: OscillatorNode[] = [];
   private sessions = new Map<string, SessionVoice>();
+  /** Ids of preview sessions: they play, but never lock the frame. */
+  private previews = new Set<string>();
   private chordTimer: NodeJS.Timeout | null = null;
-  private nextRung = 0;
-  private frameLocked = false;
   private endTail: number;
   private started = false;
   private _volume: number;
@@ -58,7 +61,10 @@ export class Engine {
     this._mute = opts.mute ?? false;
   }
 
-  /** Replace the frame. Only honoured while no session is live. */
+  /**
+   * Replace the frame. Only honoured while no real session is live; a
+   * preview that happens to be playing is retuned into the new frame.
+   */
   setFrame(frame: Frame): boolean {
     if (this.frameLocked) return false;
     this.harmony.frame = frame;
@@ -67,12 +73,19 @@ export class Engine {
       const t = this.ctx.currentTime;
       this.sub.osc.frequency.setTargetAtTime(this.harmony.rootFreq(-1), t, 0.06);
       for (const o of this.chordBed.oscs) o.osc.frequency.setTargetAtTime(this.harmony.chordFreq(o.tone, 1), t, 0.06);
+      for (const sv of this.sessions.values()) sv.retune();
     }
     return true;
   }
 
   get frame(): Frame {
     return this.harmony.frame;
+  }
+
+  /** True while at least one real (non-preview) session is live. */
+  get frameLocked(): boolean {
+    for (const id of this.sessions.keys()) if (!this.previews.has(id)) return true;
+    return false;
   }
 
   get volume(): number {
@@ -226,23 +239,54 @@ export class Engine {
     return this.sessions.get(id);
   }
 
+  /** Every live session, previews included. */
   get sessionCount(): number {
     return this.sessions.size;
+  }
+
+  /** Live sessions that lock the frame, i.e. not previews. */
+  get realSessionCount(): number {
+    return this.sessions.size - this.previews.size;
   }
 
   sessionIds(): string[] {
     return [...this.sessions.keys()];
   }
 
-  addSession(id: string, voice: Voice, texture: TextureMode = 'drone'): SessionVoice {
+  isPreview(id: string): boolean {
+    return this.previews.has(id);
+  }
+
+  /**
+   * Real sessions take the lowest free even rung from 0 so two voices never
+   * share a chord tone; previews sit at rung 6 or above every real session,
+   * out of the way of whatever is actually playing.
+   */
+  private allocateRung(preview: boolean): number {
+    const taken = new Set<number>();
+    let top = -2;
+    for (const [id, sv] of this.sessions) {
+      taken.add(sv.rung);
+      if (!this.previews.has(id)) top = Math.max(top, sv.rung);
+    }
+    if (preview) {
+      let r = Math.max(PREVIEW_RUNG, top + 2);
+      while (taken.has(r)) r += 2;
+      return r;
+    }
+    let r = 0;
+    while (taken.has(r)) r += 2;
+    return r;
+  }
+
+  addSession(id: string, voice: Voice, texture: TextureMode = 'drone', opts: { preview?: boolean } = {}): SessionVoice {
     if (!this.started) throw new Error('engine not started');
     const existing = this.sessions.get(id);
     if (existing) return existing;
-    this.frameLocked = true;
-    const rung = this.nextRung;
-    this.nextRung += 2;
-    const sv = new SessionVoice(this.ctx, this.bed, this.harmony, voice, rung, texture);
+    const preview = opts.preview === true;
+    const sv = new SessionVoice(this.ctx, this.bed, this.harmony, voice, this.allocateRung(preview), texture);
     this.sessions.set(id, sv);
+    if (preview) this.previews.add(id);
     this.recomputeBed();
     return sv;
   }
@@ -252,18 +296,15 @@ export class Engine {
     const sv = this.sessions.get(id);
     if (!sv) return false;
     sv.end(this.endTail);
-    this.sessions.delete(id);
-    this.afterRemoval();
+    this.forget(id);
     return true;
   }
 
-  private afterRemoval(): void {
-    if (this.sessions.size === 0) {
-      this.frameLocked = false;
-      this.recomputeBed(1.2);
-    } else {
-      this.recomputeBed();
-    }
+  private forget(id: string): void {
+    this.sessions.delete(id);
+    this.previews.delete(id);
+    // The bed settles slower once the last voice is gone.
+    this.recomputeBed(this.sessions.size === 0 ? 1.2 : 0.8);
   }
 
   setSessionTexture(id: string, texture: TextureMode): boolean {
@@ -311,9 +352,10 @@ export class Engine {
     this.applyMaster();
   }
 
+  /** Master level moves over MUTE_FADE_S so a mute never clicks. */
   private applyMaster(): void {
     if (!this.started) return;
-    this.master.gain.setTargetAtTime(this._mute ? 0 : this._volume, this.ctx.currentTime, 0.05);
+    fadeTo(this.master.gain, this._mute ? 0 : this._volume, this.ctx.currentTime, MUTE_FADE_S);
   }
 
   event(id: string, evt: CanonicalEvent, voice?: Voice, texture?: TextureMode): void {
@@ -355,8 +397,7 @@ export class Engine {
       case 'session.end':
         sv.sessionEnd();
         sv.end(this.endTail);
-        this.sessions.delete(id);
-        this.afterRemoval();
+        this.forget(id);
         break;
     }
   }

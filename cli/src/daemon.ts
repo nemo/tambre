@@ -1,10 +1,11 @@
 import net from 'node:net';
 import fs from 'node:fs';
+import path from 'node:path';
 import { Engine } from './engine/index.js';
 import { PALETTE, voiceByName } from './palette.js';
-import { loadUserConfig, resolveVoice } from './config.js';
+import { loadUserConfig, resolveVoice, saveUserConfig, type UserConfig } from './config.js';
 import {
-  debug, isControlMessage, pidPath, socketPath,
+  debug, isControlMessage, pidAlive, pidPath, readPidFile, socketPath,
   type Agent, type ControlMessage, type ControlReply, type HookMessage, type SessionStatus, type StatusReply,
 } from './ipc.js';
 import type { CanonicalEvent, SessionState, Voice } from './engine/types.js';
@@ -19,6 +20,11 @@ interface Session {
   voice: Voice;
   texture: TextureMode;
   muted: boolean;
+  /**
+   * The daemon's own view of the state. It mirrors the engine's, and is what
+   * status reports when the audio device failed to open and no voice exists.
+   */
+  state: SessionState;
   lastPermissionAt: number;
 }
 
@@ -44,55 +50,94 @@ export interface DaemonOpts {
    * handlers; `close()` on the handle stops it. For tests and embedding.
    */
   exit?: boolean;
+  /**
+   * `tambre daemon --foreground`: log every event to stderr and never exit
+   * for want of sessions, so a developer can watch one daemon across runs.
+   */
+  foreground?: boolean;
 }
 
 export interface DaemonHandle {
   socket: string;
   pid: number;
-  /** Stop listening, end every session, release the device. */
+  /** The engine, for tests that need to look at a voice. */
+  engine: Engine;
+  /** Stop listening, end every session, release the device. Idempotent. */
   close(): Promise<void>;
+}
+
+/** The state a session is in after `evt`, mirroring Engine.event. */
+export function nextState(state: SessionState, evt: CanonicalEvent): SessionState {
+  switch (evt) {
+    case 'session.start': case 'working': case 'activity': return 'working';
+    case 'permission.request': return 'blocked';
+    case 'turn.end': case 'turn.fail': case 'waiting': return 'waiting';
+    case 'session.end': return 'ended';
+    case 'compact': return state;
+  }
 }
 
 /**
  * One per user. Owns the audio device, keeps the session table, watches
  * agent PIDs, answers control messages, and exits once the last session is
- * gone. Prints nothing unless TAMBRE_DEBUG=1.
+ * gone. Prints nothing unless TAMBRE_DEBUG=1 (which --foreground sets).
  */
 export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
   const sock = opts.socket ?? socketPath();
   const pidFile = opts.pidFile ?? (opts.socket ? opts.socket.replace(/\.sock$/, '') + '.pid' : pidPath());
   const exitProcess = opts.exit !== false;
+  const foreground = opts.foreground === true;
   const emptyExitMs = opts.emptyExitMs ?? EMPTY_EXIT_MS;
-  const user = loadUserConfig();
+  let user: UserConfig = loadUserConfig();
   const engine = new Engine({ endTail: opts.endTail ?? END_TAIL_S, volume: user.volume, mute: user.mute });
   const sessions = new Map<string, Session>();
   const conns = new Set<net.Socket>();
   let emptyTimer: NodeJS.Timeout | null = null;
   let previewTimer: NodeJS.Timeout | null = null;
   let pidTimer: NodeJS.Timeout | null = null;
-  let closing = false;
+  let closing: Promise<void> | null = null;
+
+  /** Re-read ~/.tambre/config.json so later sessions and previews see edits. */
+  const reloadUser = () => {
+    user = loadUserConfig();
+  };
+
+  /** Write a field back to the user config; never throws, never prints. */
+  const persist = (patch: Parameters<typeof saveUserConfig>[0]) => {
+    try { saveUserConfig(patch); } catch (e) { debug('could not persist config:', String(e)); }
+  };
+
+  /** Run an engine call only when the device opened; a failed device never breaks the table. */
+  const play = (fn: () => void) => {
+    if (!engine.isStarted) return;
+    try { fn(); } catch (e) { debug('engine error:', String((e as Error)?.message ?? e)); }
+  };
 
   const cleanupFiles = () => {
+    // A Windows named pipe vanishes with its process; only unix sockets leave a file.
     for (const f of [pidFile, ...(process.platform === 'win32' ? [] : [sock])]) {
       try { fs.unlinkSync(f); } catch { /* already gone */ }
     }
   };
 
-  const shutdown = async (why: string): Promise<void> => {
-    if (closing) return;
-    closing = true;
-    debug('shutdown:', why);
-    if (emptyTimer) clearTimeout(emptyTimer);
-    if (previewTimer) clearTimeout(previewTimer);
-    if (pidTimer) clearInterval(pidTimer);
-    for (const c of conns) c.destroy();
-    await new Promise<void>((res) => server.close(() => res()));
-    cleanupFiles();
-    await engine.close();
-    if (exitProcess) process.exit(0);
+  const shutdown = (why: string): Promise<void> => {
+    if (closing) return closing;
+    closing = (async () => {
+      debug('shutdown:', why);
+      if (emptyTimer) clearTimeout(emptyTimer);
+      if (previewTimer) clearTimeout(previewTimer);
+      if (pidTimer) clearInterval(pidTimer);
+      for (const c of conns) c.destroy();
+      await new Promise<void>((res) => server.close(() => res()));
+      cleanupFiles();
+      await engine.close();
+      if (exitProcess) process.exit(0);
+    })();
+    return closing;
   };
 
   const armEmptyExit = () => {
+    if (foreground) return;
     if (emptyTimer) clearTimeout(emptyTimer);
     emptyTimer = setTimeout(() => {
       emptyTimer = null;
@@ -109,16 +154,52 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     return resolveVoice((PALETTE.find((v) => !inUse.has(v.name)) ?? PALETTE[sessions.size % PALETTE.length]).name);
   };
 
+  const stateOf = (s: Session): SessionState => engine.session(s.id)?.state ?? s.state;
+
   const endSession = (id: string, why: string) => {
     const s = sessions.get(id);
     if (!s) return;
     debug(`session ${id} end (${why})`);
     sessions.delete(id);
-    engine.event(id, 'session.end');
-    if (sessions.size === 0) armEmptyExit();
+    s.state = 'ended';
+    play(() => engine.event(id, 'session.end'));
+    if (sessions.size === 0) {
+      debug('last session gone; frame released');
+      armEmptyExit();
+    }
   };
 
   // ---- hook messages ----
+
+  const startSession = (m: HookMessage): Session => {
+    reloadUser();
+    if (sessions.size === 0) {
+      // First real session sets the frame: its project's proposal, else the
+      // user frame. The engine refuses this while any real session is live.
+      const frame = m.frame ?? user.frame;
+      const took = engine.setFrame(frame);
+      debug(`frame ${took ? 'set' : 'kept'} by first session: root ${frame.root} bpm ${frame.bpm}${m.frame ? ' (project)' : ' (user)'}`);
+    }
+    const s: Session = {
+      id: m.sessionId,
+      agent: m.agent ?? 'claude-code',
+      pid: m.pid,
+      cwd: m.cwd ?? '',
+      projectRoot: m.projectRoot ?? m.cwd ?? '',
+      voice: m.voiceSpec ? resolveVoice(m.voiceSpec) : pickVoice(m.voice),
+      texture: m.texture ?? user.texture,
+      muted: false,
+      state: 'working',
+      lastPermissionAt: 0,
+    };
+    sessions.set(s.id, s);
+    debug(`session ${s.id} start as "${s.voice.name}"/${s.texture} pid=${s.pid ?? '?'} root=${s.projectRoot}`);
+    play(() => {
+      engine.addSession(s.id, s.voice, s.texture);
+      if (m.event !== 'session.start') engine.event(s.id, 'session.start');
+    });
+    return s;
+  };
 
   const handleHook = (m: HookMessage) => {
     if (typeof m.sessionId !== 'string' || !m.sessionId || m.sessionId === PREVIEW_ID) return;
@@ -127,35 +208,21 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     let s = sessions.get(m.sessionId);
     if (!s) {
       if (m.event === 'session.end') return;
-      if (sessions.size === 0 && m.frame) {
-        debug('frame proposed by first session:', m.frame.root, m.frame.bpm);
-        engine.setFrame(m.frame);
-      }
-      s = {
-        id: m.sessionId,
-        agent: m.agent ?? 'claude-code',
-        pid: m.pid,
-        cwd: m.cwd ?? '',
-        projectRoot: m.projectRoot ?? m.cwd ?? '',
-        voice: m.voiceSpec ? resolveVoice(m.voiceSpec) : pickVoice(m.voice),
-        texture: m.texture ?? user.texture,
-        muted: false,
-        lastPermissionAt: 0,
-      };
-      sessions.set(s.id, s);
-      debug(`session ${s.id} start as "${s.voice.name}"/${s.texture} pid=${s.pid ?? '?'} root=${s.projectRoot}`);
-      engine.addSession(s.id, s.voice, s.texture);
-      if (m.event !== 'session.start') engine.event(s.id, 'session.start');
+      s = startSession(m);
     }
     if (m.pid && !s.pid) s.pid = m.pid;
     if (m.event === 'permission.request') {
+      // One ping per block: a second PermissionRequest (or the Notification
+      // that mirrors it) while this session is already blocked is ignored.
+      if (stateOf(s) === 'blocked') { debug(`session ${s.id} permission.request ignored (already blocked)`); return; }
       const now = Date.now();
-      if (now - s.lastPermissionAt < PERMISSION_DEDUPE_MS) return;
+      if (now - s.lastPermissionAt < PERMISSION_DEDUPE_MS) { debug(`session ${s.id} permission.request deduped`); return; }
       s.lastPermissionAt = now;
     }
     if (m.event === 'session.end') { endSession(s.id, 'hook'); return; }
     debug(`session ${s.id} ${m.event}`);
-    engine.event(s.id, m.event);
+    s.state = nextState(s.state, m.event);
+    play(() => engine.event(s.id, m.event));
   };
 
   // ---- control messages ----
@@ -169,7 +236,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
         projectRoot: s.projectRoot,
         voice: s.voice.name,
         texture: s.texture,
-        state: engine.session(s.id)?.state ?? 'ended',
+        state: stateOf(s),
         muted: s.muted,
         pid: s.pid,
       });
@@ -181,7 +248,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     if (previewTimer) clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
       previewTimer = null;
-      engine.removeSession(PREVIEW_ID);
+      play(() => engine.removeSession(PREVIEW_ID));
       debug('preview session dropped');
     }, PREVIEW_TTL_MS);
     previewTimer.unref();
@@ -191,6 +258,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     if (m.what !== 'event' && m.what !== 'state') return { ok: false, error: 'what must be "event" or "state"' };
     if (m.what === 'event' && !EVENTS.includes(m.name as CanonicalEvent)) return { ok: false, error: `unknown event "${m.name}"` };
     if (m.what === 'state' && !STATES.includes(m.name as SessionState)) return { ok: false, error: `unknown state "${m.name}"` };
+    if (!engine.isStarted) return { ok: false, error: 'audio device did not open; nothing to preview' };
     const voice = resolveVoice(m.voice);
     const texture = m.texture ?? user.texture;
     const existing = engine.session(PREVIEW_ID);
@@ -198,7 +266,8 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
       if (JSON.stringify(existing.voice) !== JSON.stringify(voice)) engine.setSessionVoice(PREVIEW_ID, voice);
       engine.setSessionTexture(PREVIEW_ID, texture);
     } else {
-      engine.addSession(PREVIEW_ID, voice, texture);
+      // Previews never lock the frame and never count as sessions for exit.
+      engine.addSession(PREVIEW_ID, voice, texture, { preview: true });
       if (m.what === 'state' || m.name !== 'session.start') engine.setState(PREVIEW_ID, 'waiting');
     }
     if (m.what === 'event') {
@@ -212,9 +281,12 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     } else {
       engine.setState(PREVIEW_ID, m.name === 'ended' ? 'waiting' : (m.name as SessionState));
     }
+    debug(`preview ${m.what} ${m.name} as "${voice.name}"/${texture}`);
     schedulePreviewCleanup();
     return { ok: true };
   };
+
+  const sameRoot = (a: string, b: string): boolean => path.resolve(a) === path.resolve(b);
 
   const handleControl = (m: ControlMessage): ControlReply => {
     // A client talking to the daemon pushes the idle exit back, so a TUI that
@@ -228,34 +300,48 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
         const scope = m.scope ?? 'all';
         if (scope === 'all') {
           engine.setMute(m.value);
+          persist({ mute: m.value });
+          debug(`mute all ${m.value}`);
           return { ok: true };
         }
         if (typeof scope === 'object' && scope && 'session' in scope) {
           const s = sessions.get(scope.session);
           if (!s) return { ok: false, error: `no session "${scope.session}"` };
           s.muted = m.value;
-          engine.muteSession(s.id, m.value);
+          play(() => engine.muteSession(s.id, m.value));
+          debug(`mute session ${s.id} ${m.value}`);
           return { ok: true };
         }
         if (typeof scope === 'object' && scope && 'project' in scope) {
+          if (typeof scope.project !== 'string' || !scope.project) return { ok: false, error: 'project must be a path' };
+          let n = 0;
           for (const s of sessions.values()) {
-            if (s.projectRoot === scope.project) { s.muted = m.value; engine.muteSession(s.id, m.value); }
+            if (!sameRoot(s.projectRoot, scope.project)) continue;
+            s.muted = m.value;
+            play(() => engine.muteSession(s.id, m.value));
+            n++;
           }
+          debug(`mute project ${scope.project} ${m.value} (${n} sessions)`);
           return { ok: true };
         }
         return { ok: false, error: 'scope must be "all", { project } or { session }' };
       }
-      case 'volume':
+      case 'volume': {
         if (typeof m.value !== 'number' || !Number.isFinite(m.value)) return { ok: false, error: 'value must be a number 0..1' };
         engine.setVolume(m.value);
+        persist({ volume: engine.volume });
+        debug(`volume ${engine.volume}`);
         return { ok: true };
+      }
       case 'preview':
         return preview(m);
       case 'set': {
+        reloadUser();
         const s = sessions.get(m.session);
         if (!s) return { ok: false, error: `no session "${m.session}"` };
-        if (m.voice) { s.voice = resolveVoice(m.voice); engine.setSessionVoice(s.id, s.voice); }
-        if (m.texture) { s.texture = m.texture; engine.setSessionTexture(s.id, m.texture); }
+        if (m.voice) { s.voice = resolveVoice(m.voice); play(() => engine.setSessionVoice(s.id, s.voice)); }
+        if (m.texture) { s.texture = m.texture; play(() => engine.setSessionTexture(s.id, m.texture!)); }
+        debug(`set session ${s.id} voice=${s.voice.name} texture=${s.texture}`);
         return { ok: true };
       }
       case 'shutdown':
@@ -293,30 +379,13 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     conn.on('close', () => conns.delete(conn));
   });
 
-  // A stale socket from a crashed daemon refuses connections; replace it.
-  if (process.platform !== 'win32' && fs.existsSync(sock)) {
-    const alive = await new Promise<boolean>((res) => {
-      const c = net.connect(sock);
-      c.once('connect', () => { c.end(); res(true); });
-      c.once('error', () => res(false));
-    });
-    if (alive) {
-      debug('daemon already running');
-      if (exitProcess) process.exit(0);
-      throw new Error(`a daemon is already listening on ${sock}`);
-    }
-    try { fs.unlinkSync(sock); } catch { /* ignore */ }
-  }
-
-  await new Promise<void>((res, rej) => {
-    server.once('error', rej);
-    server.listen(sock, () => res());
-  });
+  await claimSocket(server, sock, pidFile, exitProcess);
   fs.writeFileSync(pidFile, String(process.pid));
-  debug('listening on', sock, 'pid', process.pid);
+  debug('listening on', sock, 'pid', process.pid, foreground ? '(foreground)' : '');
 
   try {
     await engine.start();
+    debug('audio open');
   } catch (e) {
     // No device: keep the session table and answer status, play nothing.
     debug('audio failed to open:', String((e as Error)?.message ?? e));
@@ -326,7 +395,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
   pidTimer = setInterval(() => {
     for (const s of sessions.values()) {
       if (!s.pid) continue;
-      try { process.kill(s.pid, 0); } catch { endSession(s.id, 'agent pid gone'); }
+      if (!pidAlive(s.pid)) endSession(s.id, 'agent pid gone');
     }
   }, PID_POLL_MS);
   pidTimer.unref();
@@ -338,5 +407,62 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     process.on('uncaughtException', (e) => { debug('uncaught:', e.stack ?? String(e)); cleanupFiles(); process.exit(0); });
   }
 
-  return { socket: sock, pid: process.pid, close: () => shutdown('handle.close') };
+  return { socket: sock, pid: process.pid, engine, close: () => shutdown('handle.close') };
+}
+
+/** True when something accepts connections at `sock` right now. */
+function socketAnswers(sock: string): Promise<boolean> {
+  return new Promise((res) => {
+    const c = net.connect(sock);
+    const t = setTimeout(() => { c.destroy(); res(false); }, 500);
+    c.once('connect', () => { clearTimeout(t); c.end(); res(true); });
+    c.once('error', () => { clearTimeout(t); res(false); });
+  });
+}
+
+/**
+ * Bind the socket, recovering from what a SIGKILLed daemon leaves behind:
+ * a socket file nothing listens on and a pid file naming a dead process.
+ * A live daemon on the socket wins; we exit (or throw, when embedded).
+ *
+ * Windows: a named pipe disappears with its owner, so there is nothing to
+ * unlink; EADDRINUSE on listen is the only sign of another daemon.
+ */
+async function claimSocket(server: net.Server, sock: string, pidFile: string, exitProcess: boolean): Promise<void> {
+  const alreadyRunning = (): never => {
+    debug('daemon already running on', sock);
+    if (exitProcess) process.exit(0);
+    throw new Error(`a daemon is already listening on ${sock}`);
+  };
+
+  const oldPid = readPidFile(pidFile);
+  if (oldPid !== null && oldPid !== process.pid) {
+    if (pidAlive(oldPid)) debug(`pid file names ${oldPid}, still alive; checking its socket`);
+    else {
+      debug(`stale pid file for ${oldPid}; removing`);
+      try { fs.unlinkSync(pidFile); } catch { /* ignore */ }
+    }
+  }
+
+  if (process.platform !== 'win32' && fs.existsSync(sock)) {
+    if (await socketAnswers(sock)) alreadyRunning();
+    debug('stale socket; removing', sock);
+    try { fs.unlinkSync(sock); } catch { /* ignore */ }
+  }
+
+  const listen = () => new Promise<void>((res, rej) => {
+    server.once('error', rej);
+    server.listen(sock, () => { server.removeListener('error', rej); res(); });
+  });
+
+  try {
+    await listen();
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw e;
+    // Someone bound it between our check and our listen, or the unlink raced.
+    if (await socketAnswers(sock)) alreadyRunning();
+    if (process.platform === 'win32') alreadyRunning();
+    try { fs.unlinkSync(sock); } catch { /* ignore */ }
+    await listen();
+  }
 }

@@ -46,7 +46,8 @@ const HELP = `
     tambre hooks print <agent> [--command <cmd>]      the JSON block install would write
     tambre demo [--mode ${TEXTURE_MODES.join('|')}] [--voices moss,brass] [--out demo.wav]
     tambre hook <agent>                               hook entry point; reads the agent's JSON on stdin
-    tambre daemon                                     run the resident synth (hooks start it for you)
+    tambre daemon [--foreground]                      run the resident synth (hooks start it for you);
+                                                      --foreground logs to stderr and never idles out
 
   --project is the default inside a git repo, --user elsewhere. Textures: ${TEXTURE_MODES.join(', ')}.
   Set TAMBRE_DEBUG=1 to see daemon and hook logs on stderr.
@@ -241,9 +242,13 @@ async function main(): Promise<number> {
     }
 
     // hook and daemon never print.
-    case 'daemon':
-      await runDaemon();
+    case 'daemon': {
+      // --foreground: log to stderr and stay up with no sessions, for debugging.
+      const foreground = argv.includes('--foreground');
+      if (foreground) process.env.TAMBRE_DEBUG = process.env.TAMBRE_DEBUG || '1';
+      await runDaemon({ foreground });
       return 0; // never reached; daemon exits itself
+    }
     case 'hook': {
       const agent = argv[1] as Agent | undefined;
       if (!agent) return 0;

@@ -3,6 +3,7 @@ import type { Harmony } from './harmony.js';
 import type { SessionState, Voice } from './types.js';
 import { bell } from './bell.js';
 import { Texture, type TextureMode } from './texture.js';
+import { fadeTo, MUTE_FADE_S } from './fade.js';
 
 const GLIDE = 0.06; // time constant; ~0.2 s to settle
 const PAIR_GAIN = 0.11; // per pad pair at full, before the filter
@@ -48,6 +49,8 @@ interface Graph {
 export class SessionVoice {
   state: SessionState = 'working';
   muted = false;
+  /** How many one-shots this voice has struck; lets tests prove a dedupe. */
+  oneShots = 0;
   private g!: Graph;
   private pan: StereoPannerNode;
   private muteGain: GainNode;
@@ -193,7 +196,9 @@ export class SessionVoice {
     setTimeout(() => { try { g.gain.disconnect(); } catch { /* already gone */ } }, ms).unref();
   }
 
-  private retune(): void {
+  /** Move every sustained source onto the current chord (or a new frame). */
+  retune(): void {
+    if (this.stopped) return;
     const now = this.ctx.currentTime;
     for (const p of this.g.pairs) {
       for (const o of p.oscs) {
@@ -223,9 +228,10 @@ export class SessionVoice {
     this.rebuild(mode);
   }
 
+  /** Mute or unmute with a MUTE_FADE_S linear fade, never a click. */
   setMuted(muted: boolean): void {
     this.muted = muted;
-    this.muteGain.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.05);
+    fadeTo(this.muteGain.gain, muted ? 0 : 1, this.ctx.currentTime, MUTE_FADE_S);
   }
 
   private rebuild(mode: TextureMode): void {
@@ -323,6 +329,7 @@ export class SessionVoice {
   // ---- one-shots, all on the ladder, all in this voice's bell colour ----
 
   private strike(rungOffset: number, oct: number, delay: number, dur: number, gain: number): void {
+    if (delay === 0) this.oneShots++;
     bell(this.ctx, this.pan, {
       midi: this.harmony.chordTone(this.rung + rungOffset, this.voice.register + oct),
       when: this.ctx.currentTime + delay,
@@ -349,6 +356,7 @@ export class SessionVoice {
   }
 
   turnFail(): void {
+    this.oneShots++;
     const now = this.ctx.currentTime;
     bell(this.ctx, this.pan, { midi: this.harmony.frame.root - 12, when: now, dur: 2.5, gain: 0.24, colour: 'wood' });
     bell(this.ctx, this.pan, { midi: this.harmony.frame.root + 1, when: now + 0.03, dur: 1.6, gain: 0.08, colour: 'wood' });
@@ -361,6 +369,7 @@ export class SessionVoice {
   }
 
   compact(): void {
+    this.oneShots++;
     bell(this.ctx, this.pan, {
       midi: this.harmony.chordTone(this.rung, this.voice.register),
       when: this.ctx.currentTime,
