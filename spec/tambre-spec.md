@@ -354,6 +354,18 @@ headless hosts run that way.
   is never dropped. Every hook field is validated at the socket; a bad
   field is dropped with a debug line, a message with no usable id or event
   is ignored.
+- Hot reload: for every live session the daemon watches that project's
+  `tambre.json` and the user `config.json` (one directory watch per
+  directory, reference-counted across sessions, released when the last
+  session using it ends; `fs.watchFile` polling at 1 s where a directory
+  watch is unavailable). A change is debounced 150 ms, then each session is
+  re-resolved from disk: a different voice or texture is applied in place
+  with a fade, a changed volume or global mute is applied to the master. A
+  deleted `tambre.json` falls the session back to the user default voice
+  without taking one another live session is playing; a file that is
+  present but not JSON leaves the session as it is. Frame proposals are
+  never hot-reloaded: the frame is locked while sessions are live, so a
+  changed proposal is logged and applies at the next first session.
 - Liveness: `session.end` is lossy on at least Claude Code (Ctrl-C, async
   teardown). Every hook carries the agent's PID and the daemon polls it
   every 2 s. Death is `session.end`. A PID that dies within 5 s of being
