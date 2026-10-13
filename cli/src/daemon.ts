@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Engine } from './engine/index.js';
 import { PALETTE, voiceByName } from './palette.js';
-import { loadUserConfig, resolveVoice, saveUserConfig, type UserConfig } from './config.js';
+import {
+  loadUserConfig, mergeFrame, resolveSession, resolveVoice, saveUserConfig, validatePartialFrame, validateTexture, validateVoiceRef,
+  type ResolvedSession, type UserConfig,
+} from './config.js';
 import {
   debug, isControlMessage, pidAlive, pidPath, readPidFile, socketPath,
   type Agent, type ControlMessage, type ControlReply, type HookMessage, type SessionStatus, type StatusReply,
@@ -15,6 +18,8 @@ interface Session {
   id: string;
   agent: Agent;
   pid?: number;
+  /** When `pid` was adopted; a pid that dies within PID_GRACE_MS of this was a wrapper shell, not the agent. */
+  pidSince: number;
   cwd: string;
   projectRoot: string;
   voice: Voice;
@@ -29,6 +34,12 @@ interface Session {
 }
 
 const PID_POLL_MS = 2000;
+/**
+ * A hook's parent is the agent only when the shell that ran the hook command
+ * exec'd into node. A wrapper (`cd x && node …`) makes it a shell that exits
+ * at once; a pid gone this soon after adoption is dropped, not mourned.
+ */
+const PID_GRACE_MS = 5000;
 const PERMISSION_DEDUPE_MS = 2000;
 const EMPTY_EXIT_MS = 8000;
 const END_TAIL_S = 5;
@@ -55,6 +66,8 @@ export interface DaemonOpts {
    * for want of sessions, so a developer can watch one daemon across runs.
    */
   foreground?: boolean;
+  /** How long after adoption a dead pid is treated as a wrapper shell rather than the agent. Tests set 0. */
+  pidGraceMs?: number;
 }
 
 export interface DaemonHandle {
@@ -77,6 +90,41 @@ export function nextState(state: SessionState, evt: CanonicalEvent): SessionStat
   }
 }
 
+const isPid = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;
+const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+
+/**
+ * Check every field of a hook message at the boundary. Anything another
+ * local client could get wrong is dropped (with a debug line) rather than
+ * handed to the engine; a message with no usable id or event is null.
+ */
+export function sanitizeHook(raw: unknown): HookMessage | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const m = raw as Record<string, unknown>;
+  if (!isStr(m.sessionId) || !EVENTS.includes(m.event as CanonicalEvent)) return null;
+  const w: string[] = [];
+  const out: HookMessage = {
+    event: m.event as CanonicalEvent,
+    sessionId: m.sessionId,
+    agent: isStr(m.agent) ? (m.agent as Agent) : 'claude-code',
+    cwd: typeof m.cwd === 'string' ? m.cwd : '',
+  };
+  if (m.pid !== undefined) { if (isPid(m.pid)) out.pid = m.pid; else w.push('pid must be a positive integer'); }
+  if (m.voice !== undefined) { if (isStr(m.voice)) out.voice = m.voice; else w.push('voice must be a name'); }
+  if (m.voiceSpec !== undefined) {
+    const ref = validateVoiceRef(m.voiceSpec, 'hook', w);
+    if (ref !== undefined) out.voiceSpec = resolveVoice(ref);
+  }
+  if (m.texture !== undefined) out.texture = validateTexture(m.texture, 'hook', w);
+  if (m.frame !== undefined) {
+    const f = validatePartialFrame(m.frame, 'hook', w);
+    if (f && Object.keys(f).length) out.frame = f;
+  }
+  if (m.projectRoot !== undefined) { if (isStr(m.projectRoot)) out.projectRoot = m.projectRoot; else w.push('projectRoot must be a path'); }
+  for (const x of w) debug(`hook ${out.sessionId} ${out.event}: ${x}; field ignored`);
+  return out;
+}
+
 /**
  * One per user. Owns the audio device, keeps the session table, watches
  * agent PIDs, answers control messages, and exits once the last session is
@@ -88,6 +136,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
   const exitProcess = opts.exit !== false;
   const foreground = opts.foreground === true;
   const emptyExitMs = opts.emptyExitMs ?? EMPTY_EXIT_MS;
+  const pidGraceMs = opts.pidGraceMs ?? PID_GRACE_MS;
   let user: UserConfig = loadUserConfig();
   const engine = new Engine({ endTail: opts.endTail ?? END_TAIL_S, volume: user.volume, mute: user.mute });
   const sessions = new Map<string, Session>();
@@ -171,23 +220,47 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
 
   // ---- hook messages ----
 
+  /**
+   * A session first seen through anything but its session.start (the start
+   * was lost, or this daemon came up mid-session) carries no voice, texture,
+   * frame or root. Resolve them from the project the agent runs in, exactly
+   * as the hook would have; the daemon has the time the hook does not.
+   */
+  const adopt = (m: HookMessage): ResolvedSession | null => {
+    if (m.voiceSpec || !m.cwd) return null;
+    try {
+      const r = resolveSession(m.cwd, { user });
+      debug(`session ${m.sessionId} adopted from ${m.event}: project ${r.projectRoot}, voice ${r.voice.name} (${r.voiceSource})`);
+      return r;
+    } catch (e) {
+      debug('resolveSession failed:', String(e));
+      return null;
+    }
+  };
+
   const startSession = (m: HookMessage): Session => {
     reloadUser();
+    const r = adopt(m);
     if (sessions.size === 0) {
       // First real session sets the frame: its project's proposal, else the
       // user frame. The engine refuses this while any real session is live.
-      const frame = m.frame ?? user.frame;
+      const proposal = m.frame ? mergeFrame(user.frame, m.frame) : r?.frame;
+      const frame = proposal ?? user.frame;
       const took = engine.setFrame(frame);
-      debug(`frame ${took ? 'set' : 'kept'} by first session: root ${frame.root} bpm ${frame.bpm}${m.frame ? ' (project)' : ' (user)'}`);
+      debug(`frame ${took ? 'set' : 'kept'} by first session: root ${frame.root} bpm ${frame.bpm}${proposal ? ' (project)' : ' (user)'}`);
     }
+    const voice = m.voiceSpec ? m.voiceSpec
+      : r && r.voiceSource !== 'user' ? r.voice
+        : pickVoice(m.voice);
     const s: Session = {
       id: m.sessionId,
       agent: m.agent ?? 'claude-code',
       pid: m.pid,
+      pidSince: Date.now(),
       cwd: m.cwd ?? '',
-      projectRoot: m.projectRoot ?? m.cwd ?? '',
-      voice: m.voiceSpec ? resolveVoice(m.voiceSpec) : pickVoice(m.voice),
-      texture: m.texture ?? user.texture,
+      projectRoot: m.projectRoot ?? r?.projectRoot ?? m.cwd ?? '',
+      voice,
+      texture: m.texture ?? r?.texture ?? user.texture,
       muted: false,
       state: 'working',
       lastPermissionAt: 0,
@@ -201,16 +274,19 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     return s;
   };
 
-  const handleHook = (m: HookMessage) => {
-    if (typeof m.sessionId !== 'string' || !m.sessionId || m.sessionId === PREVIEW_ID) return;
-    if (!EVENTS.includes(m.event)) { debug('unknown event', String(m.event)); return; }
-    if (emptyTimer) { clearTimeout(emptyTimer); emptyTimer = null; }
+  const handleHook = (raw: unknown) => {
+    const m = sanitizeHook(raw);
+    if (!m) { debug('malformed hook message ignored'); return; }
+    if (m.sessionId === PREVIEW_ID) return;
     let s = sessions.get(m.sessionId);
     if (!s) {
-      if (m.event === 'session.end') return;
+      // An end for a session never seen leaves the idle timer alone: nothing
+      // is live, so the daemon must still exit on its own.
+      if (m.event === 'session.end') { if (sessions.size === 0) armEmptyExit(); return; }
       s = startSession(m);
     }
-    if (m.pid && !s.pid) s.pid = m.pid;
+    if (emptyTimer) { clearTimeout(emptyTimer); emptyTimer = null; }
+    if (m.pid && !s.pid) { s.pid = m.pid; s.pidSince = Date.now(); }
     if (m.event === 'permission.request') {
       // One ping per block: a second PermissionRequest (or the Notification
       // that mirrors it) while this session is already blocked is ignored.
@@ -259,8 +335,12 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     if (m.what === 'event' && !EVENTS.includes(m.name as CanonicalEvent)) return { ok: false, error: `unknown event "${m.name}"` };
     if (m.what === 'state' && !STATES.includes(m.name as SessionState)) return { ok: false, error: `unknown state "${m.name}"` };
     if (!engine.isStarted) return { ok: false, error: 'audio device did not open; nothing to preview' };
-    const voice = resolveVoice(m.voice);
-    const texture = m.texture ?? user.texture;
+    const w: string[] = [];
+    const ref = validateVoiceRef(m.voice, 'preview', w);
+    if (ref === undefined) return { ok: false, error: w[0] ?? 'voice must be a palette name or a voice object' };
+    const texture = m.texture === undefined ? user.texture : validateTexture(m.texture, 'preview', w);
+    if (texture === undefined) return { ok: false, error: w[0] ?? 'unknown texture' };
+    const voice = resolveVoice(ref);
     const existing = engine.session(PREVIEW_ID);
     if (existing) {
       if (JSON.stringify(existing.voice) !== JSON.stringify(voice)) engine.setSessionVoice(PREVIEW_ID, voice);
@@ -339,8 +419,13 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
         reloadUser();
         const s = sessions.get(m.session);
         if (!s) return { ok: false, error: `no session "${m.session}"` };
-        if (m.voice) { s.voice = resolveVoice(m.voice); play(() => engine.setSessionVoice(s.id, s.voice)); }
-        if (m.texture) { s.texture = m.texture; play(() => engine.setSessionTexture(s.id, m.texture!)); }
+        const w: string[] = [];
+        const ref = m.voice === undefined ? undefined : validateVoiceRef(m.voice, 'set', w);
+        if (m.voice !== undefined && ref === undefined) return { ok: false, error: w[0] ?? 'voice must be a palette name or a voice object' };
+        const texture = m.texture === undefined ? undefined : validateTexture(m.texture, 'set', w);
+        if (m.texture !== undefined && texture === undefined) return { ok: false, error: w[0] ?? 'unknown texture' };
+        if (ref !== undefined) { s.voice = resolveVoice(ref); play(() => engine.setSessionVoice(s.id, s.voice)); }
+        if (texture !== undefined) { s.texture = texture; play(() => engine.setSessionTexture(s.id, texture)); }
         debug(`set session ${s.id} voice=${s.voice.name} texture=${s.texture}`);
         return { ok: true };
       }
@@ -372,30 +457,43 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
           conn.end(JSON.stringify(reply) + '\n');
           return;
         }
-        try { handleHook(msg as HookMessage); } catch (e) { debug('hook error:', String(e)); }
+        // The socket is up before the device is: a hook that arrives while
+        // the native addon is still loading waits for it, in arrival order.
+        void engineReady.then(() => {
+          try { handleHook(msg); } catch (e) { debug('hook error:', String(e)); }
+        });
       }
     });
     conn.on('error', (e) => debug('conn error:', e.message));
     conn.on('close', () => conns.delete(conn));
   });
 
+  // Start opening the device first: the hooks that arrive once the socket
+  // is bound queue behind this, and engine.isStarted stays false until the
+  // whole graph exists (or forever, when the device cannot open).
+  const engineReady: Promise<void> = engine.start().then(
+    () => debug('audio open'),
+    // No device: keep the session table and answer status, play nothing.
+    (e) => debug('audio failed to open:', String((e as Error)?.message ?? e)),
+  );
+
   await claimSocket(server, sock, pidFile, exitProcess);
   fs.writeFileSync(pidFile, String(process.pid));
   debug('listening on', sock, 'pid', process.pid, foreground ? '(foreground)' : '');
 
-  try {
-    await engine.start();
-    debug('audio open');
-  } catch (e) {
-    // No device: keep the session table and answer status, play nothing.
-    debug('audio failed to open:', String((e as Error)?.message ?? e));
-  }
+  await engineReady;
   armEmptyExit();
 
   pidTimer = setInterval(() => {
+    const now = Date.now();
     for (const s of sessions.values()) {
-      if (!s.pid) continue;
-      if (!pidAlive(s.pid)) endSession(s.id, 'agent pid gone');
+      if (!s.pid || pidAlive(s.pid)) continue;
+      if (now - s.pidSince < pidGraceMs) {
+        debug(`session ${s.id}: pid ${s.pid} died ${now - s.pidSince} ms after adoption; a wrapper shell, not the agent. Dropped.`);
+        s.pid = undefined;
+        continue;
+      }
+      endSession(s.id, 'agent pid gone');
     }
   }, PID_POLL_MS);
   pidTimer.unref();

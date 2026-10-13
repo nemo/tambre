@@ -81,6 +81,17 @@ describe('codex adapter: hooks block and paths', () => {
     expect(codex.settingsPath('project', '/p')).toBe(path.join('/p', '.codex', 'hooks.json'));
   });
 
+  it('honours CODEX_HOME for the user scope', () => {
+    const saved = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = '/profiles/codex';
+    try {
+      expect(codex.settingsPath('user', '/p')).toBe(path.join('/profiles/codex', 'hooks.json'));
+      expect(codex.settingsPath('project', '/p')).toBe(path.join('/p', '.codex', 'hooks.json'));
+    } finally {
+      if (saved === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = saved;
+    }
+  });
+
   it('tells the user about the trust step', () => {
     expect(codex.postInstallNotes('project').join(' ')).toMatch(/\/hooks/);
     expect(codex.postInstallNotes('user').join(' ')).toMatch(/\/hooks/);

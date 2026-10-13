@@ -9,6 +9,7 @@ import { readPidFile, pidAlive, type HookMessage, type StatusReply } from './ipc
 import { loadUserConfig, saveUserConfig } from './config.js';
 import { voiceByName } from './palette.js';
 import { DEFAULT_FRAME } from './engine/types.js';
+import { spawn } from 'node:child_process';
 
 // vitest.config.ts sets TAMBRE_NO_AUDIO=1: the engine runs on a stub context.
 // Each test gets its own socket, home directory and daemon so the lifecycle
@@ -189,13 +190,117 @@ describe('frame lock and release', () => {
 
   it('releases the frame when the agent pid dies', async () => {
     const dead = spawnSync(process.execPath, ['-e', '0']).pid;
-    await start();
+    await start({ pidGraceMs: 0 });
     await hook({ event: 'session.start', sessionId: 'a', pid: dead, frame: proposal });
     await sleep(30);
     expect(daemon!.engine.frameLocked).toBe(true);
     await sleep(2200); // one pid poll
     expect((await stat()).sessions).toEqual([]);
     expect(daemon!.engine.frameLocked).toBe(false);
+  });
+
+  it('a pid that dies within the grace window was a wrapper shell: dropped, and the session lives on', async () => {
+    const shell = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 300)'], { stdio: 'ignore' });
+    await start({ pidGraceMs: 5000 });
+    await hook({ event: 'session.start', sessionId: 'a', pid: shell.pid });
+    await sleep(30);
+    expect((await stat()).sessions[0].pid).toBe(shell.pid);
+    await sleep(2500); // the "shell" exited at 300 ms; one pid poll has run
+    const s = await stat();
+    expect(s.sessions.map((x) => x.id)).toEqual(['a']);
+    expect(s.sessions[0].pid).toBeUndefined();
+    // a later hook may supply the real pid, which is then watched normally
+    await hook({ event: 'activity', sessionId: 'a', pid: process.pid });
+    await sleep(30);
+    expect((await stat()).sessions[0].pid).toBe(process.pid);
+  });
+});
+
+describe('idle exit', () => {
+  it('a session.end for a session the daemon never saw does not disarm the idle exit', async () => {
+    await start({ emptyExitMs: 400 });
+    await hook({ event: 'session.end', sessionId: 'ghost' });
+    await sleep(1200);
+    expect(await status({ socket, timeoutMs: 200 })).toBeNull();
+    expect(fs.existsSync(socket)).toBe(false);
+    daemon = null;
+  });
+});
+
+describe('input validation at the socket', () => {
+  it('a malformed frame in a hook message is ignored and the session still starts', async () => {
+    const d = await start();
+    await hook({ event: 'session.start', sessionId: 'x', frame: {} as never, pid: 'nope' as never, texture: 'loud' as never });
+    await sleep(30);
+    const s = await stat();
+    expect(s.sessions.map((x) => x.id)).toEqual(['x']);
+    expect(s.sessions[0].pid).toBeUndefined();
+    expect(s.sessions[0].texture).toBe('hush');
+    expect(s.frame).toEqual(DEFAULT_FRAME);
+    expect(d.engine.harmony.chordSeconds()).toBe(16);
+    // a partial frame fills from the user frame, never from built-in defaults
+    await hook({ event: 'session.end', sessionId: 'x' });
+    saveUserConfig({ frame: { ...DEFAULT_FRAME, bpm: 90 } });
+    await hook({ event: 'session.start', sessionId: 'y', frame: { root: 45 } as never });
+    await sleep(30);
+    expect((await stat()).frame).toEqual({ ...DEFAULT_FRAME, root: 45, bpm: 90 });
+    expect(await hook({ event: 'session.start', sessionId: '' })).toBe(true); // dropped silently
+    expect((await stat()).sessions.map((x) => x.id)).toEqual(['y']);
+  });
+
+  it('set and preview reject an unknown texture and a malformed voice with ok:false', async () => {
+    const d = await start();
+    await hook({ event: 'session.start', sessionId: 'a' });
+    await sleep(30);
+    let r = await send({ cmd: 'set', session: 'a', texture: 'loud' as never }, opts());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/texture/);
+    expect((await stat()).sessions[0].texture).toBe('hush');
+    expect(d.engine.session('a')!.texture).toBe('hush');
+    r = await send({ cmd: 'set', session: 'a', voice: { timbre: 1 } as never }, opts());
+    expect(r.ok).toBe(false);
+    // out-of-range fields on an otherwise valid voice are clamped, not passed through
+    r = await send({ cmd: 'set', session: 'a', voice: { ...voiceByName('glass')!, timbre: 9, bell: 'purple' } as never }, opts());
+    expect(r.ok).toBe(true);
+    expect(d.engine.session('a')!.voice.timbre).toBe(1);
+    expect(d.engine.session('a')!.voice.bell).toBe(voiceByName('glass')!.bell);
+
+    r = await send({ cmd: 'preview', what: 'state', name: 'working', voice: voiceByName('wire')!, texture: 'bogus' as never }, opts());
+    expect(r.ok).toBe(false);
+    expect(d.engine.session('__preview__')).toBeUndefined();
+    r = await send({ cmd: 'preview', what: 'state', name: 'working', voice: 'nope' as never, texture: 'hush' }, opts());
+    expect(r.ok).toBe(false);
+    r = await send({ cmd: 'preview', what: 'state', name: 'working', voice: { ...voiceByName('wire')!, timbre: 9 }, texture: 'hush' }, opts());
+    expect(r.ok).toBe(true);
+    expect(d.engine.session('__preview__')!.voice.timbre).toBe(1);
+  });
+});
+
+describe('adopting a session from a later event', () => {
+  it('resolves voice, texture, frame and root from the project when the start was never seen', async () => {
+    const project = path.join(dir, 'proj');
+    fs.mkdirSync(path.join(project, 'sub'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'tambre.json'), JSON.stringify({ voice: 'glass', texture: 'rain', frame: { root: 45 } }));
+    await start();
+    // the hook sends a bare message for anything but a start: cwd and pid only
+    await hook({ event: 'working', sessionId: 'late', cwd: path.join(project, 'sub'), pid: process.pid });
+    await sleep(50);
+    const s = await stat();
+    expect(s.sessions).toHaveLength(1);
+    expect(s.sessions[0]).toMatchObject({ id: 'late', voice: 'glass', texture: 'rain', projectRoot: project, pid: process.pid, state: 'working' });
+    expect(s.frame.root).toBe(45);
+    // mute --here from the root reaches it
+    await send({ cmd: 'mute', scope: { project: project }, value: true }, opts());
+    expect((await stat()).sessions[0].muted).toBe(true);
+  });
+
+  it('outside any project a late session still gets a free palette voice', async () => {
+    await start();
+    await hook({ event: 'session.start', sessionId: 'a', cwd: dir });
+    await hook({ event: 'activity', sessionId: 'b', cwd: dir });
+    await sleep(50);
+    const s = await stat();
+    expect(s.sessions.map((x) => x.voice)).toEqual(['moss', 'brass']);
   });
 });
 

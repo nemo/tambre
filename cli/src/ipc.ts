@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import type { CanonicalEvent, Frame, SessionState, Voice } from './engine/types.js';
 import type { TextureMode } from './engine/texture.js';
 
@@ -20,8 +21,8 @@ export interface HookMessage {
   voiceSpec?: Voice;
   /** What this session sounds like while working. Defaults to the daemon's user default. */
   texture?: TextureMode;
-  /** A frame the project proposes; honoured only for the first session. */
-  frame?: Frame;
+  /** A frame the project proposes; honoured only for the first session. Missing fields come from the user frame. */
+  frame?: Partial<Frame>;
   /** The project root the session runs in, for `mute --here` and status. */
   projectRoot?: string;
 }
@@ -74,21 +75,33 @@ export const isStatusReply = (r: ControlReply): r is StatusReply => r.ok && 'ses
 
 // ---- paths ----
 
+/**
+ * A daemon persists to the config under TAMBRE_HOME of whoever spawned it,
+ * so a client under a different TAMBRE_HOME must not share it: the socket
+ * name carries a short hash of that directory. Unset means the default home
+ * and the plain, unsuffixed name.
+ */
+function homeTag(): string {
+  const home = process.env.TAMBRE_HOME;
+  if (!home) return '';
+  return '-' + createHash('sha1').update(path.resolve(home)).digest('hex').slice(0, 8);
+}
+
 export function socketPath(): string {
   if (process.env.TAMBRE_SOCKET) return process.env.TAMBRE_SOCKET;
   if (process.platform === 'win32') {
-    return `\\\\.\\pipe\\tambre-${os.userInfo().username}`;
+    return `\\\\.\\pipe\\tambre-${os.userInfo().username}${homeTag()}`;
   }
   const runtime = process.env.XDG_RUNTIME_DIR;
-  if (runtime) return path.join(runtime, 'tambre.sock');
+  if (runtime) return path.join(runtime, `tambre${homeTag()}.sock`);
   const uid = typeof process.getuid === 'function' ? process.getuid() : os.userInfo().uid;
-  return path.join(process.env.TMPDIR || os.tmpdir(), `tambre-${uid}.sock`);
+  return path.join(process.env.TMPDIR || os.tmpdir(), `tambre-${uid}${homeTag()}.sock`);
 }
 
 export function pidPath(): string {
   if (process.env.TAMBRE_SOCKET) return process.env.TAMBRE_SOCKET.replace(/\.sock$/, '') + '.pid';
   if (process.platform === 'win32') {
-    return path.join(process.env.TEMP || os.tmpdir(), `tambre-${os.userInfo().username}.pid`);
+    return path.join(process.env.TEMP || os.tmpdir(), `tambre-${os.userInfo().username}${homeTag()}.pid`);
   }
   return socketPath().replace(/\.sock$/, '.pid');
 }

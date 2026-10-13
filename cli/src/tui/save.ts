@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Voice } from '../engine/types.js';
 import {
-  findProjectRoot, loadUserConfig, readProjectConfig, saveProjectConfig, saveUserConfig,
+  findProjectRoot, loadUserConfig, saveUserConfig, updateProjectConfig,
   type Patch, type VoiceRef,
 } from '../config.js';
 import { PALETTE, voiceByName } from '../palette.js';
@@ -37,14 +37,20 @@ export function voiceRefFor(voice: Voice): VoiceRef {
   return voice;
 }
 
-/** Write the edit as the project voice (tambre.json) or the user default. Returns a line for the status bar. */
+/**
+ * Write the edit as the project voice (tambre.json) or the user default.
+ * Only `voice` and `texture` are touched; whatever else the file holds stays,
+ * and a file that is not JSON is left alone (the error reaches the status
+ * bar). The palette assignment follows the voice: a tweaked voice is no
+ * longer a palette voice, so the project's claim on that name is released.
+ * Returns a line for the status bar.
+ */
 export function saveDefault(edit: Edit, cwd: string = process.cwd()): string {
   const ref = voiceRefFor(edit.voice);
   const target = saveTarget(cwd);
   if (target.inProject) {
-    const existing = readProjectConfig(target.root).config;
-    saveProjectConfig(target.root, { ...existing, voice: ref, texture: edit.texture });
-    if (typeof ref === 'string') saveUserConfig({ assignments: { [target.root]: ref } });
+    updateProjectConfig(target.root, { voice: ref, texture: edit.texture });
+    saveUserConfig({ assignments: { [target.root]: typeof ref === 'string' ? ref : null } });
     return `saved ${path.join(target.root, 'tambre.json')}`;
   }
   saveUserConfig({ voice: ref, texture: edit.texture });

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
-import { defaultScope, hasTambreHooks, hookCommand, install, mergeHooks, stripTambreHooks, uninstall } from './install.js';
+import { defaultScope, hasTambreHooks, hookCommand, install, mergeHooks, scriptPathFromCommand, stripTambreHooks, uninstall } from './install.js';
 import { loadUserConfig, userConfigPath } from './config.js';
 
 /**
@@ -45,6 +45,22 @@ describe('hookCommand', () => {
   });
   it('quotes a path with spaces', () => {
     expect(hookCommand('codex', '/My Apps/tambre.js')).toBe(`node '/My Apps/tambre.js' hook codex`);
+  });
+  it('resolves a symlinked bin (npm global, npx cache) to the real script', () => {
+    const real = path.join(home, 'lib', 'dist', 'tambre.js');
+    fs.mkdirSync(path.dirname(real), { recursive: true });
+    fs.writeFileSync(real, '');
+    const link = path.join(home, 'bin', 'tambre');
+    fs.mkdirSync(path.dirname(link), { recursive: true });
+    fs.symlinkSync(real, link);
+    expect(hookCommand('codex', link)).toBe(`node ${real} hook codex`);
+    expect(hookCommand('codex')).toMatch(/^node \S+ hook codex$/); // the default is this checkout's entry
+  });
+  it('scriptPathFromCommand reads back what hookCommand writes', () => {
+    expect(scriptPathFromCommand(`node ${BIN} hook codex`)).toBe(BIN);
+    expect(scriptPathFromCommand(hookCommand('claude-code', "/it's here/tambre.js"))).toBe("/it's here/tambre.js");
+    expect(scriptPathFromCommand('tambre hook codex')).toBeNull();
+    expect(scriptPathFromCommand('node x.js serve')).toBeNull();
   });
 });
 
@@ -153,8 +169,14 @@ describe('project install for both agents', () => {
 
   it('uninstall removes a settings file that held nothing but our hooks, and --purge drops tambre.json and the assignment', () => {
     install({ adapters: ADAPTERS, cwd: repo, binPath: BIN });
+    expect(loadUserConfig().createdFiles.sort()).toEqual([
+      path.join(repo, '.claude'), path.join(repo, '.claude', 'settings.local.json'),
+      path.join(repo, '.codex'), path.join(repo, '.codex', 'hooks.json'),
+    ].sort());
     const u = uninstall({ adapters: ADAPTERS, cwd: repo, purge: true });
     expect(u.files.map((f) => f.result)).toEqual(['removed', 'removed']);
+    expect(fs.existsSync(path.join(repo, '.claude'))).toBe(false);
+    expect(loadUserConfig().createdFiles).toEqual([]);
     expect(fs.existsSync(path.join(repo, '.claude', 'settings.local.json'))).toBe(false);
     expect(fs.existsSync(path.join(repo, '.codex', 'hooks.json'))).toBe(false);
     expect(fs.existsSync(path.join(repo, 'tambre.json'))).toBe(false);
@@ -194,6 +216,29 @@ describe('project install for both agents', () => {
     expect(r.projectFile?.voice).toBe('tide');
     expect(read(path.join(repo, 'tambre.json'))).toBe(before);
     expect(loadUserConfig().assignments).toEqual({ [repo]: 'tide' });
+  });
+
+  it('a tambre.json that is not JSON is skipped even with --voice, and no assignment is recorded', () => {
+    const file = path.join(repo, 'tambre.json');
+    fs.writeFileSync(file, '{ "voice": "glass", // my note\n}');
+    const r = install({ adapters: [claude], cwd: repo, binPath: BIN, voice: 'wire' });
+    expect(r.projectFile?.result).toBe('skipped');
+    expect(r.projectFile?.reason).toMatch(/not valid JSON/);
+    expect(read(file)).toBe('{ "voice": "glass", // my note\n}');
+    expect(loadUserConfig().assignments).toEqual({});
+    expect(r.files[0].result).toBe('written'); // hooks still go in
+  });
+
+  it('uninstall leaves a settings file that existed before install, even an empty one, and its directory', () => {
+    const claudeFile = path.join(repo, '.claude', 'settings.local.json');
+    fs.mkdirSync(path.dirname(claudeFile), { recursive: true });
+    fs.writeFileSync(claudeFile, '{}\n');
+    install({ adapters: [claude], cwd: repo, binPath: BIN });
+    expect(loadUserConfig().createdFiles).toEqual([]);
+    const u = uninstall({ adapters: [claude], cwd: repo });
+    expect(u.files[0].result).toBe('written');
+    expect(fs.existsSync(claudeFile)).toBe(true);
+    expect(json(claudeFile)).toEqual({});
   });
 
   it('a settings file that is not JSON is skipped, not clobbered', () => {

@@ -52,12 +52,14 @@ describe('doctor', () => {
   });
 
   it('reports hooks ok after install, flags bad config, palette collisions and a stale pid file', async () => {
-    install({ adapters: ADAPTERS, cwd: repo, binPath: '/x/tambre.js' });
+    const bin = path.join(home, 'tambre.js');
+    fs.writeFileSync(bin, '');
+    install({ adapters: ADAPTERS, cwd: repo, binPath: bin });
     fs.writeFileSync(path.join(repo, 'tambre.json'), '{ "voice": "kazoo" }');
     saveUserConfig({ assignments: { '/a': 'moss', '/b': 'moss' }, volume: 'loud' as never });
     fs.writeFileSync(path.join(home, 'd.pid'), '999999999');
 
-    const checks = await doctor({ cwd: repo, client: { socket, timeoutMs: 200 } });
+    const checks = await doctor({ cwd: repo, client: { socket, timeoutMs: 200 }, binPath: bin });
     for (const a of ADAPTERS) expect(byName(checks, `hooks ${a.agent}`).status).toBe('ok');
     expect(byName(checks, 'project config').status).toBe('warn');
     expect(byName(checks, 'project config').detail).toMatch(/kazoo/);
@@ -66,6 +68,27 @@ describe('doctor', () => {
     expect(byName(checks, 'palette').detail).toMatch(/"moss" is assigned to/);
     expect(byName(checks, 'pid file').status).toBe('warn');
     expect(byName(checks, 'pid file').detail).toMatch(/stale/);
+  });
+
+  it('hooks whose command points at a binary that no longer exists are a fail; another binary is a warn', async () => {
+    const bin = path.join(home, 'tambre.js');
+    fs.writeFileSync(bin, '');
+    install({ adapters: ADAPTERS, cwd: repo, binPath: bin });
+
+    const other = path.join(home, 'other.js');
+    fs.writeFileSync(other, '');
+    let checks = await doctor({ cwd: repo, client: { socket, timeoutMs: 200 }, binPath: other });
+    for (const a of ADAPTERS) {
+      expect(byName(checks, `hooks ${a.agent}`).status).toBe('warn');
+      expect(byName(checks, `hooks ${a.agent}`).detail).toMatch(/not this binary/);
+    }
+
+    fs.unlinkSync(bin); // npx cache purged, nvm version removed, checkout moved
+    checks = await doctor({ cwd: repo, client: { socket, timeoutMs: 200 }, binPath: other });
+    for (const a of ADAPTERS) {
+      expect(byName(checks, `hooks ${a.agent}`).status).toBe('fail');
+      expect(byName(checks, `hooks ${a.agent}`).detail).toMatch(/no longer exists/);
+    }
   });
 
   it('a settings file that is not JSON is a fail', async () => {

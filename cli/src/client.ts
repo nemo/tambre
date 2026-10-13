@@ -1,6 +1,9 @@
+import fs from 'node:fs';
 import net from 'node:net';
-import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { spawn, type StdioOptions } from 'node:child_process';
 import { debug, isStatusReply, socketPath, type ControlMessage, type ControlReply, type HookMessage, type StatusReply } from './ipc.js';
+import { tambreHome } from './config.js';
 
 /**
  * Everything that talks to the daemon goes through here: hooks, the CLI and
@@ -95,16 +98,40 @@ export async function status(opts: ClientOpts = {}): Promise<StatusReply | null>
   return reply;
 }
 
+/** Where a daemon's debug log goes: ~/.tambre/daemon.log (under TAMBRE_HOME). */
+export const daemonLogPath = (): string => path.join(tambreHome(), 'daemon.log');
+
+/**
+ * The stdio a spawned daemon gets. Never the caller's own descriptors: in a
+ * hook they are the agent's capture pipes, and a detached daemon holding
+ * them open would look to the agent like a hook that never finished. With
+ * TAMBRE_DEBUG the daemon's stderr goes to daemon.log instead.
+ */
+export function daemonStdio(): { stdio: StdioOptions; fd?: number } {
+  if (!process.env.TAMBRE_DEBUG) return { stdio: 'ignore' };
+  try {
+    const file = daemonLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const fd = fs.openSync(file, 'a');
+    return { stdio: ['ignore', fd, fd], fd };
+  } catch (e) {
+    debug('could not open daemon.log:', String(e));
+    return { stdio: 'ignore' };
+  }
+}
+
 /** Start the daemon detached from this process. The caller does not wait for it. */
 export function spawnDaemon(): number | undefined {
+  const { stdio, fd } = daemonStdio();
   const child = spawn(process.execPath, [...process.execArgv, process.argv[1], 'daemon'], {
     detached: true,
-    stdio: process.env.TAMBRE_DEBUG ? ['ignore', 'inherit', 'inherit'] : 'ignore',
+    stdio,
     windowsHide: true,
     env: process.env,
   });
   child.unref();
-  debug('spawned daemon pid', child.pid);
+  if (fd !== undefined) { try { fs.closeSync(fd); } catch { /* the child holds its own copy */ } }
+  debug('spawned daemon pid', child.pid, fd !== undefined ? `(log: ${daemonLogPath()})` : '');
   return child.pid;
 }
 

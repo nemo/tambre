@@ -5,7 +5,8 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   findProjectRoot, loadProjectConfig, loadUserConfig, nextUnusedPaletteVoice, readProjectConfig, readUserConfig,
-  resolveSession, resolveVoice, saveUserConfig, userConfigPath, validateUserConfig, DEFAULT_TEXTURE, DEFAULT_VOLUME,
+  resolveSession, resolveVoice, saveUserConfig, updateProjectConfig, userConfigPath, validateUserConfig, validateFrame,
+  ConfigError, DEFAULT_TEXTURE, DEFAULT_VOLUME,
 } from './config.js';
 import { DEFAULT_FRAME } from './engine/types.js';
 import { PALETTE, voiceByName } from './palette.js';
@@ -47,6 +48,7 @@ describe('defaults', () => {
       mute: false,
       assignments: {},
       patches: {},
+      createdFiles: [],
     });
     expect(r.path).toBe(path.join(home, 'config.json'));
   });
@@ -74,6 +76,16 @@ describe('project overrides user', () => {
     expect(r.texture).toBe('rain');
     expect(r.frame).toEqual({ ...DEFAULT_FRAME, root: 40, bpm: 64 });
     expect(r.projectRoot).toBe(project);
+  });
+
+  it('a partial project frame overrides the user frame per field, not the built-in defaults', () => {
+    writeUser({ frame: { bpm: 70, chordBars: 8 } });
+    writeProject(project, { voice: 'glass', frame: { root: 45 } });
+    const r = resolveSession(project);
+    expect(r.frame).toEqual({ ...DEFAULT_FRAME, root: 45, bpm: 70, chordBars: 8 });
+    expect(readProjectConfig(project).config.frame).toEqual({ root: 45 }); // stored partial
+    // validateFrame fills from the base it is given
+    expect(validateFrame({ root: 40 }, 'x', [], { ...DEFAULT_FRAME, bpm: 99 })).toEqual({ ...DEFAULT_FRAME, root: 40, bpm: 99 });
   });
 
   it('a project without a texture inherits the user texture', () => {
@@ -148,6 +160,23 @@ describe('findProjectRoot', () => {
     const sub = path.join(project, 'a', 'b');
     fs.mkdirSync(sub, { recursive: true });
     expect(findProjectRoot(sub)).toBe(project);
+  });
+
+  it('stops at the git toplevel: a tambre.json above the repo does not capture it', () => {
+    // outer/ is a checkout with tambre.json (think: a dotfiles $HOME); outer/code/app is its own repo
+    const outer = project;
+    writeProject(outer, { voice: 'moss' });
+    execFileSync('git', ['init', '-q'], { cwd: outer });
+    const inner = path.join(outer, 'code', 'app');
+    fs.mkdirSync(path.join(inner, 'src'), { recursive: true });
+    execFileSync('git', ['init', '-q'], { cwd: inner });
+    expect(findProjectRoot(path.join(inner, 'src'))).toBe(inner);
+    expect(findProjectRoot(inner)).toBe(inner);
+    // a tambre.json inside the inner repo still wins over its toplevel
+    writeProject(path.join(inner, 'src'), {});
+    expect(findProjectRoot(path.join(inner, 'src'))).toBe(path.join(inner, 'src'));
+    // and the outer repo itself still resolves to its own file
+    expect(findProjectRoot(path.join(outer, 'code'))).toBe(outer);
   });
 
   it('cwd when there is neither', () => {
@@ -255,5 +284,30 @@ describe('saveUserConfig', () => {
     expect(onDisk.future).toEqual({ x: 1 });
     expect(onDisk.voice).toBe('tide');
     expect(onDisk.mute).toBe(true);
+  });
+
+  it('refuses to overwrite a file that is not JSON, so a syntax slip never loses patches and assignments', () => {
+    const broken = '{ "voice": "tide", "assignments": { "/a": "moss" }, "patches": { "warm": { "texture": "hum" } }, }';
+    writeUser(broken);
+    expect(() => saveUserConfig({ mute: true })).toThrow(ConfigError);
+    expect(() => saveUserConfig({ mute: true })).toThrow(/not valid JSON/);
+    expect(fs.readFileSync(userConfigPath(), 'utf8')).toBe(broken);
+  });
+});
+
+describe('updateProjectConfig', () => {
+  it('merges into the file, keeping unknown keys and invalid user-authored values', () => {
+    writeProject(project, { $schema: 'x', voice: 'tide', frame: { root: 'G2' } });
+    updateProjectConfig(project, { voice: 'glass', texture: 'rain' });
+    expect(JSON.parse(fs.readFileSync(path.join(project, 'tambre.json'), 'utf8')))
+      .toEqual({ $schema: 'x', voice: 'glass', frame: { root: 'G2' }, texture: 'rain' });
+    updateProjectConfig(project, { texture: null });
+    expect(loadProjectConfig(project)).toEqual({ voice: 'glass' });
+  });
+
+  it('refuses a file that is not JSON', () => {
+    writeProject(project, '{ "voice": "glass", // comment');
+    expect(() => updateProjectConfig(project, { voice: 'wire' })).toThrow(ConfigError);
+    expect(fs.readFileSync(path.join(project, 'tambre.json'), 'utf8')).toBe('{ "voice": "glass", // comment');
   });
 });

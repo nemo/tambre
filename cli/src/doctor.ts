@@ -3,7 +3,7 @@ import { ADAPTERS, type Adapter } from './adapters/index.js';
 import { status, type ClientOpts } from './client.js';
 import { findProjectRoot, readProjectConfig, readUserConfig } from './config.js';
 import { noAudio } from './engine/context.js';
-import { defaultScope, hasTambreHooks } from './install.js';
+import { defaultScope, hasTambreHooks, hookCommand, isTambreEntry, scriptPathFromCommand } from './install.js';
 import { pidPath, socketPath } from './ipc.js';
 import type { InstallScope } from './adapters/types.js';
 
@@ -29,6 +29,23 @@ export interface DoctorOpts {
   skipAudio?: boolean;
   /** Milliseconds to wait for the device to open. */
   audioTimeoutMs?: number;
+  /** The binary hooks should point at; defaults to this one. Tests pass what they installed. */
+  binPath?: string;
+}
+
+/** Every command carried by our entries in a settings document. */
+export function tambreCommands(doc: unknown): string[] {
+  const out: string[] = [];
+  const hooks = typeof doc === 'object' && doc !== null && typeof (doc as { hooks?: unknown }).hooks === 'object' ? (doc as { hooks: Record<string, unknown> }).hooks : {};
+  for (const groups of Object.values(hooks ?? {})) {
+    if (!Array.isArray(groups)) continue;
+    for (const g of groups) {
+      const list = typeof g === 'object' && g !== null ? (g as { hooks?: unknown }).hooks : undefined;
+      if (!Array.isArray(list)) continue;
+      for (const h of list) if (isTambreEntry(h) && typeof (h as { command?: unknown }).command === 'string') out.push((h as { command: string }).command);
+    }
+  }
+  return [...new Set(out)];
 }
 
 const MIN_NODE_MAJOR = 22;
@@ -114,9 +131,20 @@ export async function doctor(opts: DoctorOpts = {}): Promise<Check[]> {
         return { name: `hooks ${a.agent}`, status: 'fail', detail: `${file} is not valid JSON (${(e as Error).message})` };
       }
       const r = hasTambreHooks(doc, a.events());
-      if (r.all) return { name: `hooks ${a.agent}`, status: 'ok', detail: `${file} (${scope})` };
       if (r.present.length === 0) return { name: `hooks ${a.agent}`, status: 'warn', detail: `not installed in ${file}; run \`tambre install --agent ${a.agent} --${scope}\`` };
-      return { name: `hooks ${a.agent}`, status: 'warn', detail: `${file} is missing ${r.missing.join(', ')}; run install again` };
+      if (!r.all) return { name: `hooks ${a.agent}`, status: 'warn', detail: `${file} is missing ${r.missing.join(', ')}; run install again` };
+      // The entries exist; do they still run anything, and is it this binary?
+      // Hooks never print, so a stale path is otherwise invisible.
+      const expected = hookCommand(a.agent, opts.binPath);
+      for (const cmd of tambreCommands(doc)) {
+        if (cmd === expected) continue;
+        const script = scriptPathFromCommand(cmd);
+        if (script && !fs.existsSync(script)) {
+          return { name: `hooks ${a.agent}`, status: 'fail', detail: `${file} runs ${script}, which no longer exists; run \`tambre install --agent ${a.agent} --${scope}\` again` };
+        }
+        return { name: `hooks ${a.agent}`, status: 'warn', detail: `${file} runs "${cmd}", not this binary ("${expected}"); run install again to update it` };
+      }
+      return { name: `hooks ${a.agent}`, status: 'ok', detail: `${file} (${scope})` };
     }));
   }
 

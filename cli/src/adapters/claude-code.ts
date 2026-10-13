@@ -4,11 +4,15 @@ import type { CanonicalEvent } from '../engine/types.js';
 import { buildHooksBlock, isObj, readCommonFields, type Adapter, type InstallScope, type ParsedHook } from './types.js';
 
 /**
- * Claude Code. Hooks live in JSON settings: ~/.claude/settings.json for the
- * user, <root>/.claude/settings.local.json for a project (gitignored by Claude
- * Code itself). <root>/.claude/settings.json is committed and never touched.
+ * Claude Code. Hooks live in JSON settings: $CLAUDE_CONFIG_DIR/settings.json
+ * (default ~/.claude/settings.json) for the user, <root>/.claude/settings.local.json
+ * for a project (gitignored by Claude Code itself). <root>/.claude/settings.json
+ * is committed and never touched.
  * Payload fields: hook_event_name, session_id, cwd, notification_type, tool_name.
  */
+
+/** Claude Code reads its user settings from CLAUDE_CONFIG_DIR when set. */
+export const claudeConfigDir = (): string => process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
 
 const EVENT_MAP: Record<string, CanonicalEvent> = {
   SessionStart: 'session.start',
@@ -48,7 +52,7 @@ export const claudeCode: Adapter = {
 
   settingsPath: (scope: InstallScope, root: string) =>
     scope === 'user'
-      ? path.join(os.homedir(), '.claude', 'settings.json')
+      ? path.join(claudeConfigDir(), 'settings.json')
       : path.join(root, '.claude', 'settings.local.json'),
 
   parse(input: unknown): ParsedHook | null {

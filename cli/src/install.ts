@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import type { Adapter, HookGroup, HooksBlock, InstallScope } from './adapters/types.js';
 import { isObj } from './adapters/types.js';
 import {
   findProjectRoot, loadUserConfig, nextUnusedPaletteVoice, projectConfigPath, readProjectConfig,
-  saveProjectConfig, saveUserConfig, validateTexture, validateVoiceRef, type ProjectConfig,
+  saveProjectConfig, saveUserConfig, updateProjectConfig, validateTexture, validateVoiceRef, type ProjectConfig,
 } from './config.js';
 import type { TextureMode } from './engine/texture.js';
 import { voiceByName } from './palette.js';
@@ -47,7 +48,8 @@ export interface FileChange {
 export interface InstallReport {
   scope: InstallScope;
   root: string;
-  projectFile?: { path: string; result: 'written' | 'updated' | 'unchanged'; voice: string; texture?: TextureMode };
+  /** 'skipped' when tambre.json exists but is not JSON; `reason` says so and nothing is written. */
+  projectFile?: { path: string; result: 'written' | 'updated' | 'unchanged' | 'skipped'; voice: string; texture?: TextureMode; reason?: string };
   files: FileChange[];
   notes: string[];
   warnings: string[];
@@ -77,12 +79,38 @@ function shellArg(p: string): string {
 }
 
 /**
+ * The real dist/tambre.js: the entry next to this module when it is a built
+ * file, else whatever process.argv[1] points at. Symlinks are resolved so a
+ * command never names an npm bin link or npx cache entry that may vanish.
+ */
+export function defaultBinPath(): string {
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+  try {
+    const here = path.join(path.dirname(fileURLToPath(import.meta.url)), 'tambre.js');
+    if (fs.existsSync(here)) return real(here);
+  } catch { /* not a file URL */ }
+  return real(process.argv[1] ?? 'tambre');
+}
+
+/**
  * `node <absolute dist/tambre.js> hook <agent>`. Local settings files are
  * per machine, so an absolute path is right and survives PATH changes.
  */
-export function hookCommand(agent: string, binPath: string = process.argv[1] ?? 'tambre'): string {
-  const abs = path.resolve(binPath);
+export function hookCommand(agent: string, binPath?: string): string {
+  const abs = binPath === undefined ? defaultBinPath() : realOrResolved(binPath);
   return `node ${shellArg(abs)} hook ${agent}`;
+}
+
+function realOrResolved(p: string): string {
+  const abs = path.resolve(p);
+  try { return fs.realpathSync(abs); } catch { return abs; }
+}
+
+/** The script a hook command of ours runs (`node <path> hook <agent>`), or null for anything else. */
+export function scriptPathFromCommand(command: string): string | null {
+  const m = /^node (?:'((?:[^']|'\\'')+)'|(\S+)) hook \S+$/.exec(command.trim());
+  if (!m) return null;
+  return m[1] !== undefined ? m[1].replace(/'\\''/g, "'") : m[2];
 }
 
 // ---- scope and root ----
@@ -176,11 +204,29 @@ function readSettings(file: string): ReadResult {
 
 const render = (doc: unknown) => JSON.stringify(doc, null, 2) + '\n';
 
+/**
+ * Write the file, remembering in the user config what was created from
+ * nothing (the file, and its directory when that was missing too) so that
+ * uninstall deletes only what install made and never a user's own file.
+ */
 function writeSettings(file: string, doc: unknown): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const dir = path.dirname(file);
+  const created: string[] = [];
+  if (!fs.existsSync(dir)) created.push(dir);
+  if (!fs.existsSync(file)) created.push(file);
+  fs.mkdirSync(dir, { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, render(doc));
   fs.renameSync(tmp, file);
+  if (created.length) rememberCreated(created, []);
+}
+
+function rememberCreated(add: string[], remove: string[]): void {
+  try {
+    const have = loadUserConfig().createdFiles;
+    const next = [...have.filter((p) => !remove.includes(p)), ...add.filter((p) => !have.includes(p))];
+    if (next.length !== have.length || next.some((p, i) => p !== have[i])) saveUserConfig({ createdFiles: next });
+  } catch { /* a broken user config must not block an install; uninstall will then keep the file */ }
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -246,7 +292,7 @@ export function install(opts: InstallOpts): InstallReport {
     const patch: { voice?: string; texture?: TextureMode } = {};
     if (voiceArg) patch.voice = voiceArg;
     if (texture) patch.texture = texture;
-    if (Object.keys(patch).length) saveUserConfig(patch);
+    if (Object.keys(patch).length) saveUserConfig(patch); // throws on a broken config.json rather than overwrite it
   }
 
   for (const adapter of opts.adapters) {
@@ -285,6 +331,13 @@ function ensureProjectFile(
   const existing = readProjectConfig(root);
   warnings.push(...existing.warnings);
 
+  // A tambre.json that is not JSON gets the same treatment as a broken
+  // settings file: hands off, and no assignment recorded for a voice we
+  // cannot read.
+  if (existing.error) {
+    return { path: file, result: 'skipped', voice: '?', reason: 'not valid JSON; fix it and run install again' };
+  }
+
   let result: 'written' | 'updated' | 'unchanged';
   let config: ProjectConfig;
   if (!existing.exists) {
@@ -294,13 +347,11 @@ function ensureProjectFile(
     result = 'written';
   } else {
     config = { ...existing.config };
-    let changed = false;
-    if (voiceArg && config.voice !== voiceArg) { config.voice = voiceArg; changed = true; }
-    if (texture && config.texture !== texture) { config.texture = texture; changed = true; }
-    if (changed) {
-      // keep unknown keys the file already has
-      const raw = readRaw(file);
-      saveProjectConfig(root, { ...raw, ...config } as ProjectConfig);
+    const patch: { voice?: string; texture?: TextureMode } = {};
+    if (voiceArg && config.voice !== voiceArg) { config.voice = voiceArg; patch.voice = voiceArg; }
+    if (texture && config.texture !== texture) { config.texture = texture; patch.texture = texture; }
+    if (Object.keys(patch).length) {
+      updateProjectConfig(root, patch); // keeps every other key the file has
       result = 'updated';
     } else {
       result = 'unchanged';
@@ -309,20 +360,13 @@ function ensureProjectFile(
 
   // Record the palette assignment when the project voice is a palette name.
   const name = typeof config.voice === 'string' ? config.voice : isObj(config.voice) ? config.voice.name : undefined;
-  if (name && voiceByName(name) && user.assignments[root] !== name) saveUserConfig({ assignments: { [root]: name } });
+  if (name && voiceByName(name) && user.assignments[root] !== name) {
+    try { saveUserConfig({ assignments: { [root]: name } }); } catch (e) { warnings.push(String((e as Error).message)); }
+  }
   const w: string[] = [];
   const ref = validateVoiceRef(config.voice, file, w);
   const voiceLabel = typeof ref === 'string' ? ref : isObj(ref) ? String(ref.name) : 'moss';
   return { path: file, result, voice: voiceLabel, texture: config.texture };
-}
-
-function readRaw(file: string): Record<string, unknown> {
-  try {
-    const v = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return isObj(v) ? v : {};
-  } catch {
-    return {};
-  }
 }
 
 // ---- uninstall ----
@@ -333,6 +377,7 @@ export function uninstall(opts: UninstallOpts): UninstallReport {
   const root = findProjectRoot(cwd);
   const report: UninstallReport = { scope, root, files: [], warnings: [] };
 
+  const created = loadUserConfig().createdFiles;
   for (const adapter of opts.adapters) {
     const file = adapter.settingsPath(scope, root);
     const r = readSettings(file);
@@ -340,11 +385,16 @@ export function uninstall(opts: UninstallOpts): UninstallReport {
     if (r.error) { report.files.push({ agent: adapter.agent, path: file, result: 'skipped', reason: `not valid JSON (${r.error})` }); continue; }
     const { doc, removed } = stripTambreHooks(r.doc);
     if (removed === 0) { report.files.push({ agent: adapter.agent, path: file, result: 'unchanged' }); continue; }
-    if (Object.keys(doc).length === 0) {
-      // Nothing but our hooks was ever in it; leave no empty file behind,
-      // nor an empty directory we created for it (rmdir refuses a non-empty one).
+    if (Object.keys(doc).length === 0 && created.includes(file)) {
+      // Install made this file from nothing and nothing else ever went in it:
+      // leave no empty file behind, nor the directory when that was ours too
+      // (rmdir refuses a non-empty one). A file that pre-existed, even as
+      // `{}`, is the user's and is only emptied of our entries.
+      const dir = path.dirname(file);
       fs.unlinkSync(file);
-      try { fs.rmdirSync(path.dirname(file)); } catch { /* not empty, or not ours */ }
+      const gone = [file];
+      if (created.includes(dir)) { try { fs.rmdirSync(dir); gone.push(dir); } catch { /* not empty */ } }
+      rememberCreated([], gone);
       report.files.push({ agent: adapter.agent, path: file, result: 'removed' });
     } else {
       writeSettings(file, doc);

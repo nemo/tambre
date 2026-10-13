@@ -83,4 +83,15 @@ describe('claude-code adapter: hooks block and paths', () => {
     expect(claudeCode.settingsPath('user', '/p')).toBe(path.join(os.homedir(), '.claude', 'settings.json'));
     expect(claudeCode.settingsPath('project', '/p')).toBe(path.join('/p', '.claude', 'settings.local.json'));
   });
+
+  it('honours CLAUDE_CONFIG_DIR for the user scope', () => {
+    const saved = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = '/profiles/work';
+    try {
+      expect(claudeCode.settingsPath('user', '/p')).toBe(path.join('/profiles/work', 'settings.json'));
+      expect(claudeCode.settingsPath('project', '/p')).toBe(path.join('/p', '.claude', 'settings.local.json'));
+    } finally {
+      if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = saved;
+    }
+  });
 });

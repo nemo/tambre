@@ -50,7 +50,9 @@ export class Engine {
   private previews = new Set<string>();
   private chordTimer: NodeJS.Timeout | null = null;
   private endTail: number;
+  /** True only once the whole graph exists; see start(). */
   private started = false;
+  private starting: Promise<void> | null = null;
   private _volume: number;
   private _mute: boolean;
 
@@ -100,9 +102,22 @@ export class Engine {
     return this.started;
   }
 
-  async start(): Promise<void> {
-    if (this.started) return;
-    this.started = true;
+  /**
+   * Open the device and build the master chain. `started` flips only once
+   * everything exists: a session added or a frame set while the native addon
+   * is still loading must see an engine that is not started yet, not one with
+   * half a graph. If the device fails to open, the engine stays not started
+   * and every later call is a no-op that the daemon can keep guarding.
+   */
+  start(): Promise<void> {
+    if (this.started) return Promise.resolve();
+    if (!this.starting) {
+      this.starting = this.build().finally(() => { this.starting = null; });
+    }
+    return this.starting;
+  }
+
+  private async build(): Promise<void> {
     this.ctx = await createAudioContext();
     if (this.ctx.state !== 'running') await this.ctx.resume();
     const now = this.ctx.currentTime;
@@ -147,7 +162,10 @@ export class Engine {
     this.sub = { osc: sub, gain: sg };
 
     this.makeChordBed(now);
+    this.started = true;
     this.scheduleChord();
+    // Sessions and frames may have arrived while the device was opening.
+    this.recomputeBed();
   }
 
   /**
@@ -187,13 +205,16 @@ export class Engine {
   }
 
   private scheduleChord(): void {
+    // A frame is validated before it reaches the engine; this only keeps a
+    // bad one from turning the timer into a 1 ms loop.
+    const ms = this.harmony.chordSeconds() * 1000;
     this.chordTimer = setTimeout(() => {
       if (this.sessions.size > 0) {
         this.harmony.advance();
         if (this.anyTexture((m) => m === 'drone')) this.chordRoll();
       }
       this.scheduleChord();
-    }, this.harmony.chordSeconds() * 1000);
+    }, Number.isFinite(ms) && ms >= 1000 ? ms : 16_000);
     this.chordTimer.unref();
   }
 
@@ -423,7 +444,11 @@ export class Engine {
   /** Resolves once the last tail has rung out, then releases the device. */
   async close(): Promise<void> {
     if (this.chordTimer) clearTimeout(this.chordTimer);
+    if (this.starting) { try { await this.starting; } catch { /* device never opened */ } }
     if (!this.started) return;
+    // A preview still ringing at shutdown is not a session ending: drop it
+    // without the end roll so an idle exit never chimes.
+    for (const id of [...this.previews]) this.removeSession(id);
     // Only wait for the end roll when there are voices left to ring it. The
     // daemon's idle exit already outlasts the tail of any session that ended
     // on its own, so this keeps that exit prompt.

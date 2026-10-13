@@ -38,11 +38,17 @@ export interface UserConfig {
   /** absolute project root -> palette voice name */
   assignments: Record<string, string>;
   patches: Record<string, Patch>;
+  /** Settings files and directories `tambre install` created from nothing, so uninstall may remove them. */
+  createdFiles: string[];
 }
 
+/**
+ * tambre.json. A frame proposal may be partial: only the fields it names
+ * override the user frame (project > user > built-in defaults, per field).
+ */
 export interface ProjectConfig {
   voice?: VoiceRef;
-  frame?: Frame;
+  frame?: Partial<Frame>;
   texture?: TextureMode;
 }
 
@@ -52,12 +58,16 @@ export interface Loaded<T> {
   /** Where it was (or would be) read from. */
   path: string;
   exists: boolean;
+  /** Set when the file exists but is not JSON; `config` is then all defaults. */
+  error?: string;
 }
 
 export interface ResolvedSession {
   voice: Voice;
+  /** Where the voice came from, so a daemon adopting a session knows whether it is project-specific. */
+  voiceSource: 'project' | 'assignment' | 'user';
   texture: TextureMode;
-  /** The project's frame proposal, if tambre.json carries one. */
+  /** The project's frame proposal over the user frame, if tambre.json carries one. */
   frame?: Frame;
   projectRoot: string;
 }
@@ -84,6 +94,7 @@ export function defaultUserConfig(): UserConfig {
     mute: false,
     assignments: {},
     patches: {},
+    createdFiles: [],
   };
 }
 
@@ -107,7 +118,18 @@ const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-const cloneFrame = (f: Frame): Frame => ({ ...f, voicings: f.voicings.map((v) => [...v]) });
+export const cloneFrame = (f: Frame): Frame => ({ ...f, voicings: f.voicings.map((v) => [...v]) });
+
+/** `over` wins per field; `base` fills the rest. Always a fresh object. */
+export function mergeFrame(base: Frame, over: Partial<Frame> | undefined): Frame {
+  const f = cloneFrame(base);
+  if (!over) return f;
+  if (over.root !== undefined) f.root = over.root;
+  if (over.bpm !== undefined) f.bpm = over.bpm;
+  if (over.chordBars !== undefined) f.chordBars = over.chordBars;
+  if (over.voicings !== undefined) f.voicings = over.voicings.map((v) => [...v]);
+  return f;
+}
 export const cloneVoice = (v: Voice): Voice => ({
   ...v,
   movement: { ...v.movement },
@@ -146,14 +168,20 @@ export function validateTexture(raw: unknown, where: string, warnings: string[])
   return undefined;
 }
 
-/** A frame with every field checked; missing or bad fields fall back to DEFAULT_FRAME. */
-export function validateFrame(raw: unknown, where: string, warnings: string[]): Frame | undefined {
+/** A frame with every field checked; missing or bad fields fall back to `base` (DEFAULT_FRAME). */
+export function validateFrame(raw: unknown, where: string, warnings: string[], base: Frame = DEFAULT_FRAME): Frame | undefined {
+  const partial = validatePartialFrame(raw, where, warnings);
+  return partial ? mergeFrame(base, partial) : undefined;
+}
+
+/** Only the frame fields present and valid in `raw`; the rest are left for the caller to fill. */
+export function validatePartialFrame(raw: unknown, where: string, warnings: string[]): Partial<Frame> | undefined {
   if (raw === undefined) return undefined;
   if (!isObj(raw)) {
     warnings.push(`${where}: frame must be an object; ignored`);
     return undefined;
   }
-  const f = cloneFrame(DEFAULT_FRAME);
+  const f: Partial<Frame> = {};
   if (raw.root !== undefined) {
     if (isNum(raw.root)) {
       const r = Math.round(raw.root);
@@ -278,6 +306,10 @@ export function validateUserConfig(raw: unknown, where = 'config.json'): { confi
       }
     } else warnings.push(`${where}: assignments must be an object`);
   }
+  if (raw.createdFiles !== undefined) {
+    if (Array.isArray(raw.createdFiles) && raw.createdFiles.every((f) => typeof f === 'string')) c.createdFiles = [...(raw.createdFiles as string[])];
+    else warnings.push(`${where}: createdFiles must be a list of paths`);
+  }
   if (raw.patches !== undefined) {
     if (isObj(raw.patches)) {
       for (const [name, p] of Object.entries(raw.patches)) {
@@ -307,8 +339,8 @@ export function validateProjectConfig(raw: unknown, where = PROJECT_FILE): { con
   }
   const voice = validateVoiceRef(raw.voice, where, warnings);
   if (voice !== undefined) c.voice = voice;
-  const frame = validateFrame(raw.frame, where, warnings);
-  if (frame) c.frame = frame;
+  const frame = validatePartialFrame(raw.frame, where, warnings);
+  if (frame && Object.keys(frame).length) c.frame = frame;
   const texture = validateTexture(raw.texture, where, warnings);
   if (texture) c.texture = texture;
   return { config: c, warnings };
@@ -322,7 +354,7 @@ export function readUserConfig(): Loaded<UserConfig> {
   const { raw, exists, warning } = readJson(file);
   const { config, warnings } = validateUserConfig(raw, file);
   if (warning) warnings.unshift(warning);
-  return { config, warnings, path: file, exists };
+  return { config, warnings, path: file, exists, ...(warning ? { error: warning } : {}) };
 }
 
 /** The user config, defaults filled in, warnings dropped. Never throws. */
@@ -334,15 +366,26 @@ export function loadUserConfig(): UserConfig {
  * Merge `partial` into the user config file and write it back pretty-printed.
  * `assignments` and `patches` merge one level deep; a `null` entry removes a key.
  * Unknown keys already in the file are kept. Returns what is now on disk.
+ *
+ * Throws a ConfigError when the file exists but is not JSON: a hand-edited
+ * file with a syntax slip must never be replaced by just the patch.
  */
 export type UserConfigPatch = Omit<Partial<UserConfig>, 'assignments' | 'patches'> & {
   assignments?: Record<string, string | null>;
   patches?: Record<string, Patch | null>;
 };
 
+export class ConfigError extends Error {
+  constructor(message: string, public readonly file: string) {
+    super(message);
+    this.name = 'ConfigError';
+  }
+}
+
 export function saveUserConfig(partial: UserConfigPatch): UserConfig {
   const file = userConfigPath();
-  const { raw } = readJson(file);
+  const { raw, warning } = readJson(file);
+  if (warning) throw new ConfigError(`${file} is not valid JSON; fix it before saving`, file);
   const base: Record<string, unknown> = isObj(raw) ? { ...raw } : {};
   for (const [k, v] of Object.entries(partial)) {
     if (v === undefined) continue;
@@ -366,7 +409,7 @@ export function readProjectConfig(root: string): Loaded<ProjectConfig> {
   const { raw, exists, warning } = readJson(file);
   const { config, warnings } = validateProjectConfig(raw, file);
   if (warning) warnings.unshift(warning);
-  return { config, warnings, path: file, exists };
+  return { config, warnings, path: file, exists, ...(warning ? { error: warning } : {}) };
 }
 
 /** The project's tambre.json, or null when the project has none. Never throws. */
@@ -375,8 +418,27 @@ export function loadProjectConfig(root: string): ProjectConfig | null {
   return r.exists ? r.config : null;
 }
 
+/** Overwrite tambre.json with exactly `config`. Prefer updateProjectConfig to keep what else is in the file. */
 export function saveProjectConfig(root: string, config: ProjectConfig): void {
   writeJson(projectConfigPath(root), config);
+}
+
+/**
+ * Merge `patch` into tambre.json as it is on disk: keys the file already has
+ * (known or not) are kept, `undefined` leaves a key alone, `null` removes it.
+ * Throws a ConfigError rather than overwrite a file that is not JSON.
+ */
+export function updateProjectConfig(root: string, patch: { [K in keyof ProjectConfig]?: ProjectConfig[K] | null }): void {
+  const file = projectConfigPath(root);
+  const { raw, warning } = readJson(file);
+  if (warning) throw new ConfigError(`${file} is not valid JSON; fix it before saving`, file);
+  const base: Record<string, unknown> = isObj(raw) ? { ...raw } : {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    if (v === null) delete base[k];
+    else base[k] = v;
+  }
+  writeJson(file, base);
 }
 
 // ---- project root ----
@@ -397,21 +459,27 @@ function gitToplevel(cwd: string): string | null {
 
 /**
  * Nearest ancestor of cwd (inclusive) holding tambre.json, else the git
- * toplevel, else cwd itself. Always absolute, with symlinks resolved so that
- * a root recorded by a hook (given the agent's cwd) compares equal to one
- * resolved from process.cwd() (which macOS reports under /private/tmp, etc.).
+ * toplevel, else cwd itself. Inside a git checkout the search for tambre.json
+ * stops at that checkout's toplevel: a tambre.json in $HOME (or any other
+ * ancestor) must not capture every repo beneath it. Always absolute, with
+ * symlinks resolved so that a root recorded by a hook (given the agent's cwd)
+ * compares equal to one resolved from process.cwd() (which macOS reports
+ * under /private/tmp, etc.).
  */
 export function findProjectRoot(cwd: string = process.cwd()): string {
-  let dir = path.resolve(cwd);
-  let found: string | null = null;
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return p; } };
+  const start = real(path.resolve(cwd));
+  const top = gitToplevel(cwd);
+  const bound = top ? real(top) : null;
+  let dir = start;
   for (;;) {
-    if (fs.existsSync(path.join(dir, PROJECT_FILE))) { found = dir; break; }
+    if (fs.existsSync(path.join(dir, PROJECT_FILE))) return dir;
+    if (bound !== null && dir === bound) break;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  const root = found ?? gitToplevel(cwd) ?? path.resolve(cwd);
-  try { return fs.realpathSync(root); } catch { return root; }
+  return bound ?? start;
 }
 
 // ---- resolution ----
@@ -448,11 +516,15 @@ export function resolveSession(cwd: string = process.cwd(), opts: { user?: UserC
   const projectRoot = opts.root ?? findProjectRoot(cwd);
   const user = opts.user ?? loadUserConfig();
   const project = loadProjectConfig(projectRoot);
-  const ref = project?.voice ?? user.assignments[projectRoot] ?? user.voice;
+  const [ref, voiceSource]: [VoiceRef, ResolvedSession['voiceSource']] =
+    project?.voice !== undefined ? [project.voice, 'project']
+      : user.assignments[projectRoot] !== undefined ? [user.assignments[projectRoot], 'assignment']
+        : [user.voice, 'user'];
   return {
     voice: resolveVoice(ref),
+    voiceSource,
     texture: project?.texture ?? user.texture,
-    frame: project?.frame,
+    frame: project?.frame ? mergeFrame(user.frame, project.frame) : undefined,
     projectRoot,
   };
 }

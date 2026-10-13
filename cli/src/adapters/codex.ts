@@ -4,7 +4,8 @@ import type { CanonicalEvent } from '../engine/types.js';
 import { buildHooksBlock, readCommonFields, type Adapter, type InstallScope, type ParsedHook } from './types.js';
 
 /**
- * OpenAI Codex CLI. Hooks live in ~/.codex/hooks.json (user) or
+ * OpenAI Codex CLI. Hooks live in $CODEX_HOME/hooks.json (default
+ * ~/.codex/hooks.json) for the user or
  * <root>/.codex/hooks.json (project; loaded only once the project's .codex
  * layer is trusted in Codex). Shape verified against
  * https://learn.chatgpt.com/docs/hooks on 2026-10-12:
@@ -21,6 +22,9 @@ import { buildHooksBlock, readCommonFields, type Adapter, type InstallScope, typ
  * hook_event_name, model. PreToolUse/PostToolUse/PermissionRequest add
  * tool_name; SessionStart adds source; SessionEnd adds reason.
  */
+
+/** Codex keeps its user files under CODEX_HOME when set. */
+export const codexHome = (): string => process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
 
 const EVENT_MAP: Record<string, CanonicalEvent> = {
   SessionStart: 'session.start',
@@ -54,7 +58,7 @@ export const codex: Adapter = {
 
   settingsPath: (scope: InstallScope, root: string) =>
     scope === 'user'
-      ? path.join(os.homedir(), '.codex', 'hooks.json')
+      ? path.join(codexHome(), 'hooks.json')
       : path.join(root, '.codex', 'hooks.json'),
 
   parse(input: unknown): ParsedHook | null {

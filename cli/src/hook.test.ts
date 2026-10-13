@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { buildHookMessage } from './hook.js';
+import { PassThrough } from 'node:stream';
+import { agentPid, buildHookMessage, readStdin } from './hook.js';
 import { getAdapter } from './adapters/index.js';
 
 let home: string;
@@ -38,9 +39,49 @@ describe('buildHookMessage', () => {
     expect(buildHookMessage('claude-code', parsed, { voice: 'reed', ppid: 1 }).voiceSpec?.name).toBe('reed');
   });
 
-  it('other events are lean: no pid, no voice spec', () => {
+  it('other events are lean (no voice spec) but still carry the agent pid, so an adopted session can be reaped', () => {
     const parsed = getAdapter('claude-code')!.parse({ session_id: 's', cwd: project, hook_event_name: 'Stop' })!;
     const m = buildHookMessage('claude-code', parsed);
-    expect(m).toEqual({ event: 'turn.end', sessionId: 's', agent: 'claude-code', cwd: project, pid: undefined });
+    expect(m).toEqual({ event: 'turn.end', sessionId: 's', agent: 'claude-code', cwd: project, pid: process.ppid });
+    expect(buildHookMessage('claude-code', parsed, { ppid: 77 }).pid).toBe(77);
+  });
+});
+
+describe('agentPid', () => {
+  it('walks up past wrapper shells to the process that launched the hook command', () => {
+    const tree: Record<number, { ppid: number; comm: string }> = {
+      50: { ppid: 40, comm: 'sh' },        // `sh -c 'cd x && node …'` did not exec
+      40: { ppid: 30, comm: '/bin/zsh' },  // an outer login shell wrapper
+      30: { ppid: 1, comm: 'claude' },     // the agent
+    };
+    const lookup = (pid: number) => tree[pid] ?? null;
+    expect(agentPid(50, lookup)).toBe(30);
+    expect(agentPid(30, lookup)).toBe(30);
+    expect(agentPid(999, lookup)).toBe(999); // unknown: keep what we have
+  });
+
+  it('never walks past init or beyond a few hops', () => {
+    const lookup = (pid: number) => ({ ppid: pid - 1, comm: 'bash' });
+    expect(agentPid(3, lookup)).toBe(2);
+    expect(agentPid(100, lookup)).toBe(96);
+  });
+});
+
+describe('readStdin', () => {
+  it('resolves what arrived and destroys a stream the writer never closes, so the hook can exit', async () => {
+    const stream = new PassThrough();
+    stream.write('{"a":1}');
+    const t0 = Date.now();
+    const text = await readStdin(stream, 100);
+    expect(text).toBe('{"a":1}');
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(stream.destroyed).toBe(true);
+  });
+
+  it('returns promptly when the stream ends', async () => {
+    const stream = new PassThrough();
+    const p = readStdin(stream, 5000);
+    stream.end('{"b":2}');
+    expect(await p).toBe('{"b":2}');
   });
 });

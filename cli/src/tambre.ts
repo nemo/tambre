@@ -12,7 +12,7 @@ import { ADAPTERS, adaptersFor, getAdapter } from './adapters/index.js';
 import { install, uninstall, type InstallReport, type UninstallReport } from './install.js';
 import { doctor, formatCheck } from './doctor.js';
 import { send, status, DaemonError } from './client.js';
-import { findProjectRoot, loadUserConfig, saveUserConfig } from './config.js';
+import { ConfigError, findProjectRoot, loadUserConfig, saveUserConfig } from './config.js';
 import type { InstallScope } from './adapters/types.js';
 
 const require = createRequire(import.meta.url);
@@ -63,7 +63,9 @@ function pickAdapters(): ReturnType<typeof adaptersFor> {
 
 function printInstall(r: InstallReport): void {
   out(`Installed for ${r.scope === 'project' ? `project ${r.root}` : 'your user'}\n`);
-  if (r.projectFile) {
+  if (r.projectFile?.result === 'skipped') {
+    out(`  skipped   ${r.projectFile.path}  ${r.projectFile.reason ?? ''}\n`);
+  } else if (r.projectFile) {
     const verb = r.projectFile.result === 'written' ? 'wrote' : r.projectFile.result === 'updated' ? 'updated' : 'kept';
     out(`  ${verb.padEnd(9)} ${r.projectFile.path}  (voice ${r.projectFile.voice}${r.projectFile.texture ? `, texture ${r.projectFile.texture}` : ''})\n`);
   }
@@ -166,7 +168,7 @@ async function cmdTui(): Promise<number> {
     return 1;
   }
   const spec = './tui/index.js';
-  let mod: { runTui?: () => Promise<void> | void; default?: () => Promise<void> | void };
+  let mod: { runTui?: () => Promise<number | void> | number | void; default?: () => Promise<number | void> | number | void };
   try {
     mod = await import(spec);
   } catch (e) {
@@ -176,8 +178,9 @@ async function cmdTui(): Promise<number> {
   }
   const run = mod.runTui ?? mod.default;
   if (typeof run !== 'function') { err('TUI not built\n'); return 1; }
-  await run();
-  return 0;
+  // runTui returns 1 when the daemon could not be started; pass that on.
+  const code = await run();
+  return typeof code === 'number' ? code : 0;
 }
 
 async function main(): Promise<number> {
@@ -196,7 +199,7 @@ async function main(): Promise<number> {
       if (!adapters) return 1;
       const r = install({ adapters, scope: scopeFlag(), voice: flag('--voice'), texture: flag('--texture'), command: flag('--command') });
       printInstall(r);
-      return r.files.some((f) => f.result === 'skipped') ? 1 : 0;
+      return r.files.some((f) => f.result === 'skipped') || r.projectFile?.result === 'skipped' ? 1 : 0;
     }
     case 'uninstall': {
       const adapters = pickAdapters();
@@ -253,7 +256,9 @@ async function main(): Promise<number> {
       const agent = argv[1] as Agent | undefined;
       if (!agent) return 0;
       try { await runHook(agent, { voice: flag('--voice') }); } catch { /* never fail the agent */ }
-      return 0;
+      // Nothing left to do; an inherited handle (a stdin pipe the launcher
+      // keeps open) must not hold the agent's hook slot any longer.
+      process.exit(0);
     }
 
     default:
@@ -268,6 +273,7 @@ main().then((code) => { process.exitCode = code; }, (e) => {
   if (cmd === 'hook') { process.exitCode = 0; return; }
   if (cmd === 'daemon') { debug('daemon failed:', String(e?.stack ?? e)); process.exitCode = 1; return; }
   if (e instanceof DaemonError) { err(`daemon: ${e.message}\n`); process.exitCode = 1; return; }
+  if (e instanceof ConfigError) { err(`tambre: ${e.message}\n`); process.exitCode = 1; return; }
   err(String(e?.stack ?? e) + '\n');
   process.exitCode = 1;
 });
