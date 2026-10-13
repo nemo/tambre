@@ -1,12 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Voice } from '../engine/types.js';
+import type { TextureMode } from '../engine/texture.js';
 import {
-  findProjectRoot, loadUserConfig, saveUserConfig, updateProjectConfig,
+  findProjectRoot, loadUserConfig, saveUserConfig, updateProjectConfig, userConfigPath,
   type Patch, type VoiceRef,
 } from '../config.js';
-import { PALETTE, voiceByName } from '../palette.js';
-import type { Edit } from './macros.js';
+import { voiceByName } from '../palette.js';
+import type { PatchEntry } from './model.js';
+
+/** What `s` writes: one voice and its texture. */
+export interface Edit {
+  voice: Voice;
+  texture: TextureMode;
+}
 
 /**
  * Where 's' writes: the project's tambre.json when the TUI runs inside a
@@ -23,6 +30,22 @@ export function saveTarget(cwd: string = process.cwd()): SaveTarget {
   const inProject = fs.existsSync(path.join(root, 'tambre.json')) || fs.existsSync(path.join(root, '.git'));
   return { root, inProject };
 }
+
+/**
+ * First run: inside a project, no tambre.json yet; outside one, no user
+ * config file yet. The PALETTE page opens with its note until the first save.
+ */
+export function isFirstRun(cwd: string = process.cwd()): boolean {
+  const t = saveTarget(cwd);
+  if (t.inProject) return !fs.existsSync(path.join(t.root, 'tambre.json'));
+  return !fs.existsSync(userConfigPath());
+}
+
+/** `$HOME` shown as `~`, so a saved path fits the status line. */
+export const shortHome = (p: string): string => {
+  const home = process.env.HOME;
+  return home && p.startsWith(home) ? '~' + p.slice(home.length) : p;
+};
 
 const sameVoice = (a: Voice, b: Voice): boolean =>
   a.timbre === b.timbre && a.register === b.register && a.brightness === b.brightness &&
@@ -41,9 +64,9 @@ export function voiceRefFor(voice: Voice): VoiceRef {
  * Write the edit as the project voice (tambre.json) or the user default.
  * Only `voice` and `texture` are touched; whatever else the file holds stays,
  * and a file that is not JSON is left alone (the error reaches the status
- * bar). The palette assignment follows the voice: a tweaked voice is no
+ * line). The palette assignment follows the voice: a tweaked voice is no
  * longer a palette voice, so the project's claim on that name is released.
- * Returns a line for the status bar.
+ * Returns a line for the status line.
  */
 export function saveDefault(edit: Edit, cwd: string = process.cwd()): string {
   const ref = voiceRefFor(edit.voice);
@@ -51,7 +74,7 @@ export function saveDefault(edit: Edit, cwd: string = process.cwd()): string {
   if (target.inProject) {
     updateProjectConfig(target.root, { voice: ref, texture: edit.texture });
     saveUserConfig({ assignments: { [target.root]: typeof ref === 'string' ? ref : null } });
-    return `saved ${path.join(target.root, 'tambre.json')}`;
+    return `saved ${shortHome(path.join(target.root, 'tambre.json'))}`;
   }
   saveUserConfig({ voice: ref, texture: edit.texture });
   return 'saved as user default';
@@ -66,20 +89,11 @@ export function savePatch(name: string, edit: Edit): string {
   return `saved patch "${trimmed}"`;
 }
 
-/** What the left column lists: the palette, then the saved patches. */
-export interface Preset {
-  kind: 'palette' | 'patch';
-  name: string;
-  voice: Voice;
-  /** Patches may carry a texture; palette voices never do. */
-  texture?: Edit['texture'];
-}
-
-export function listPresets(): Preset[] {
+/** The user's saved patches, name-sorted. */
+export function listPatches(): PatchEntry[] {
   const user = loadUserConfig();
-  const palette: Preset[] = PALETTE.map((v) => ({ kind: 'palette', name: v.name, voice: v }));
-  const patches: Preset[] = Object.entries(user.patches)
+  return Object.entries(user.patches)
     .filter(([, p]) => p.voice)
-    .map(([name, p]) => ({ kind: 'patch', name, voice: p.voice as Voice, texture: p.texture }));
-  return [...palette, ...patches];
+    .map(([name, patch]) => ({ name, patch }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

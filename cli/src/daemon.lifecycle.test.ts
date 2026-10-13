@@ -347,6 +347,35 @@ describe('mute scopes', () => {
   });
 });
 
+describe('frame control', () => {
+  it('applies a frame while no real session is live, and refuses one while any is', async () => {
+    const d = await start();
+    const ok = await send({ cmd: 'frame', frame: { root: 45, bpm: 66 } }, opts());
+    expect(ok).toEqual({ ok: true });
+    expect(d.engine.frame.root).toBe(45);
+    expect(d.engine.frame.bpm).toBe(66);
+    expect((await stat()).frame.root).toBe(45);
+
+    await hook({ event: 'session.start', sessionId: 'a', voiceSpec: voiceByName('moss')! });
+    await sleep(30);
+    const refused = await send({ cmd: 'frame', frame: { root: 40 } }, opts());
+    expect(refused.ok).toBe(false);
+    expect((refused as { error: string }).error).toContain('locked');
+    expect(d.engine.frame.root).not.toBe(40);
+
+    await hook({ event: 'session.end', sessionId: 'a' });
+    await sleep(250);
+    expect(await send({ cmd: 'frame', frame: { root: 40 } }, opts())).toEqual({ ok: true });
+    expect(d.engine.frame.root).toBe(40);
+  });
+
+  it('rejects a frame that is not an object', async () => {
+    await start();
+    const r = await send({ cmd: 'frame', frame: 'nope' as never }, opts());
+    expect(r.ok).toBe(false);
+  });
+});
+
 describe('stale socket and pid recovery', () => {
   it('takes over a dead socket file and a pid file naming a dead process', async () => {
     const dead = spawnSync(process.execPath, ['-e', '0']).pid!;

@@ -82,8 +82,23 @@ export const BELL_COLOURS: BellColour[] = ['glass', 'wood', 'soft'];
 /** Named voicing sets a frame may refer to by string. */
 export const VOICING_SETS: Record<string, number[][]> = {
   default: DEFAULT_FRAME.voicings,
+  // Every set: four five-note voicings over the pedal, major third present in
+  // at least three of them, and no b6, b7, b9 or tritone anywhere.
   dusk: DEFAULT_FRAME.voicings,
+  dawn: [[0, 4, 7, 14, 16], [0, 7, 11, 16, 19], [0, 4, 9, 14, 19], [0, 5, 11, 14, 16]],
+  harbor: [[0, 7, 9, 16, 19], [0, 4, 11, 14, 19], [0, 5, 9, 12, 16], [0, 7, 11, 16, 21]],
+  field: [[0, 4, 7, 9, 14], [0, 2, 7, 11, 16], [0, 4, 9, 11, 19], [0, 7, 12, 16, 23]],
 };
+
+/** The names a user can pick from (the `default` alias is hidden). */
+export const VOICING_SET_NAMES: string[] = Object.keys(VOICING_SETS).filter((n) => n !== 'default');
+
+/** Which named set these voicings are, or null for a hand-written set. */
+export function voicingSetName(voicings: number[][]): string | null {
+  const key = JSON.stringify(voicings);
+  for (const name of VOICING_SET_NAMES) if (JSON.stringify(VOICING_SETS[name]) === key) return name;
+  return null;
+}
 
 export function defaultUserConfig(): UserConfig {
   return {

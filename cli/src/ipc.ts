@@ -37,6 +37,8 @@ export type ControlMessage =
   | { cmd: 'volume'; value: number }
   | { cmd: 'preview'; what: 'event' | 'state'; name: CanonicalEvent | SessionState; voice: Voice; texture: TextureMode }
   | { cmd: 'set'; session: string; voice?: Voice; texture?: TextureMode }
+  /** Replace the frame; refused while any real session is live. */
+  | { cmd: 'frame'; frame: Partial<Frame> }
   | { cmd: 'shutdown' };
 
 export type ControlCmd = ControlMessage['cmd'];

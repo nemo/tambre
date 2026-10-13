@@ -7,7 +7,7 @@ import { render } from 'ink-testing-library';
 import { App, type TuiClient } from './App.js';
 import type { ControlMessage, StatusReply } from '../ipc.js';
 import { DEFAULT_FRAME } from '../engine/types.js';
-import { readUserConfig, readProjectConfig } from '../config.js';
+import { readUserConfig, readProjectConfig, VOICING_SETS } from '../config.js';
 import { voiceByName } from '../palette.js';
 
 // vitest.config.ts sets TAMBRE_NO_AUDIO=1; the TUI never touches the engine anyway.
@@ -17,7 +17,11 @@ let cwd: string;
 const savedHome = process.env.TAMBRE_HOME;
 
 const tmp = (prefix: string) => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
-const tick = (ms = 30) => new Promise((r) => setTimeout(r, ms));
+const tick = (ms = 40) => new Promise((r) => setTimeout(r, ms));
+const TAB = '\t';
+const ENTER = '\r';
+const RIGHT = '\u001b[C';
+const DOWN = '\u001b[B';
 
 const STATUS: StatusReply = {
   ok: true,
@@ -29,6 +33,7 @@ const STATUS: StatusReply = {
     { id: 's2', agent: 'codex', projectRoot: '/work/beta', voice: 'glass', texture: 'hush', state: 'blocked', muted: true, pid: 2 },
   ],
 };
+const QUIET: StatusReply = { ...STATUS, sessions: [] };
 
 /** A client that records what the TUI sends and answers ok. */
 function fakeClient(status: StatusReply | null = STATUS): TuiClient & { sent: ControlMessage[] } {
@@ -40,13 +45,23 @@ function fakeClient(status: StatusReply | null = STATUS): TuiClient & { sent: Co
   };
 }
 
-const mount = (client: TuiClient, dir = cwd) =>
-  render(<App client={client} cwd={dir} initialStatus={STATUS} pollMs={60_000} />);
+const mount = (client: TuiClient, status: StatusReply | null = STATUS, dir = cwd) =>
+  render(<App client={client} cwd={dir} initialStatus={status} pollMs={60_000} cols={100} rows={30} />);
+
+/** A git checkout: a project without a tambre.json, so the TUI is on its first run. */
+const makeProject = (dir: string) => fs.mkdirSync(path.join(dir, '.git'));
+
+/** Press keys one per tick, so each handler sees the state the previous one left. */
+async function keys(r: { stdin: { write(s: string): void } }, ...ks: string[]): Promise<void> {
+  for (const k of ks) { r.stdin.write(k); await tick(); }
+}
 
 beforeEach(() => {
   home = tmp('tambre-tui-home-');
   cwd = tmp('tambre-tui-cwd-');
   process.env.TAMBRE_HOME = home;
+  // A user config exists: outside a project this is a returning user, not a first run.
+  fs.writeFileSync(path.join(home, 'config.json'), '{}');
 });
 
 afterEach(() => {
@@ -55,203 +70,198 @@ afterEach(() => {
   fs.rmSync(cwd, { recursive: true, force: true });
 });
 
-describe('initial render', () => {
-  it('shows the palette, the default voice sliders and the live sessions', async () => {
-    const r = mount(fakeClient());
+describe('first run', () => {
+  it('opens on the palette with the note, and the note leaves after the first save', async () => {
+    makeProject(cwd);
+    const r = mount(fakeClient(QUIET), QUIET);
     await tick();
-    const frame = r.lastFrame() ?? '';
-    expect(frame).toContain('tambre');
-    expect(frame).toContain('daemon ok');
-    for (const name of ['moss', 'brass', 'cedar', 'glass', 'reed', 'tide', 'wire', 'felt']) expect(frame).toContain(name);
-    // the user default voice (moss) is loaded and its timbre is shown
-    expect(frame).toContain('> timbre');
-    expect(frame).toContain('0.05');
-    expect(frame).toContain('texture');
-    expect(frame).toContain('hush');
-    // sessions: voice, project basename, state, muted
-    expect(frame).toContain('alpha');
-    expect(frame).toContain('beta');
-    expect(frame).toContain('working');
-    expect(frame).toContain('blocked');
-    expect(frame).toContain('muted');
-    r.unmount();
+    const f = r.lastFrame()!;
+    expect(f).toContain('No voice for this project yet.');
+    expect(f).toContain('PALETTE');
+    expect(f).toMatch(/▸ moss/);
+    expect(f).toContain('dark, soft');
+    expect(f).not.toContain('moss •');
+    await keys(r, RIGHT, ENTER);
+    expect(r.lastFrame()).toContain('loaded brass');
+    r.stdin.write('s'); await tick();
+    expect(r.lastFrame()).not.toContain('No voice for this project yet.');
+    expect(readProjectConfig(cwd).config.voice).toBe('brass');
+    expect(r.lastFrame()).toContain('brass •');
   });
 
-  it('starts from the project voice when cwd has a tambre.json', async () => {
-    fs.writeFileSync(path.join(cwd, 'tambre.json'), JSON.stringify({ voice: 'wire', texture: 'pulse' }));
-    const r = mount(fakeClient());
+  it('opens on VOICE when the project already has a voice', async () => {
+    makeProject(cwd);
+    fs.writeFileSync(path.join(cwd, 'tambre.json'), JSON.stringify({ voice: 'cedar', texture: 'rain' }));
+    const r = mount(fakeClient(QUIET), QUIET);
     await tick();
-    const frame = r.lastFrame() ?? '';
-    expect(frame).toContain('*wire');
-    expect(frame).toContain('pulse');
-    r.unmount();
+    expect(r.lastFrame()).not.toContain('No voice for this project yet.');
+    expect(r.lastFrame()).toMatch(/▸ timbre/);
+    expect(r.lastFrame()).toContain('0.20'); // cedar's timbre
   });
 });
 
-describe('sliders', () => {
-  it('l raises the focused slider by one step and h lowers it', async () => {
+describe('pages and cells', () => {
+  it('Tab cycles the five pages forward and Shift-Tab back', async () => {
     const r = mount(fakeClient());
     await tick();
-    r.stdin.write('l');
-    await tick();
-    expect(r.lastFrame()).toContain('0.10');
-    r.stdin.write('h');
-    await tick();
-    expect(r.lastFrame()).toContain('0.05');
-    r.unmount();
+    expect(r.lastFrame()).toMatch(/▸ timbre/);
+    r.stdin.write(TAB); await tick();
+    expect(r.lastFrame()).toMatch(/▸ texture/);
+    r.stdin.write(TAB); await tick();
+    expect(r.lastFrame()).toMatch(/▸ attack/);
+    r.stdin.write(TAB); await tick();
+    expect(r.lastFrame()).toContain('PATCHES');
+    r.stdin.write(TAB); await tick();
+    expect(r.lastFrame()).toMatch(/▸ moss/);
+    r.stdin.write('\u001b[Z'); await tick(); // shift-tab
+    expect(r.lastFrame()).toContain('PATCHES');
   });
 
-  it('Tab moves focus and the texture slider cycles through the modes', async () => {
+  it('arrows move in two dimensions and h/l adjust the focused value', async () => {
     const r = mount(fakeClient());
     await tick();
-    // texture is the 9th main macro; Shift-Tab from the first wraps to it
-    r.stdin.write('\u001B[Z');
-    await tick();
-    expect(r.lastFrame()).toContain('> texture');
-    r.stdin.write('l');
-    await tick();
-    expect(r.lastFrame()).toMatch(/texture\s+< none/);
-    r.stdin.write('l');
-    await tick();
-    expect(r.lastFrame()).toMatch(/texture\s+< drone/);
-    r.unmount();
+    await keys(r, RIGHT, DOWN);
+    expect(r.lastFrame()).toMatch(/▸ move rate/);
+    r.stdin.write('l'); await tick();
+    expect(r.lastFrame()).toContain('0.06');
+    await keys(r, 'h', 'h');
+    expect(r.lastFrame()).toContain('0.04');
+    expect(r.lastFrame()).toContain('move rate 0.04');
   });
 
-  it('a toggles the advanced page', async () => {
+  it('l on a cycle cell advances it and wraps', async () => {
     const r = mount(fakeClient());
     await tick();
-    r.stdin.write('a');
-    await tick();
-    const frame = r.lastFrame() ?? '';
-    expect(frame).toContain('> attack');
-    expect(frame).toContain('fm ratio');
-    expect(frame).toContain('stored only');
-    r.stdin.write('l');
-    await tick();
-    expect(r.lastFrame()).toContain('0.40'); // attack fallback 0.35 + 0.05
-    r.unmount();
+    await keys(r, RIGHT, RIGHT, RIGHT);
+    expect(r.lastFrame()).toMatch(/▸ bell/);
+    r.stdin.write('l'); await tick();
+    expect(r.lastFrame()).toContain('‹ glass ›');
   });
 });
 
-describe('daemon commands', () => {
-  it('2 previews turn.end with the edited voice and texture', async () => {
+describe('auditions', () => {
+  it('space previews the working state of the edited voice', async () => {
     const client = fakeClient();
     const r = mount(client);
     await tick();
-    r.stdin.write('l'); // timbre 0.05 -> 0.10 so the preview carries an edit
-    await tick();
-    r.stdin.write('2');
-    await tick();
-    expect(client.sent).toHaveLength(1);
-    const msg = client.sent[0];
-    expect(msg.cmd).toBe('preview');
-    if (msg.cmd !== 'preview') throw new Error('unreachable');
-    expect(msg.what).toBe('event');
-    expect(msg.name).toBe('turn.end');
-    expect(msg.texture).toBe('hush');
-    expect(msg.voice.name).toBe('moss');
-    expect(msg.voice.timbre).toBeCloseTo(0.10);
-    expect(r.lastFrame()).toContain('preview turn.end');
-    r.unmount();
+    r.stdin.write(' '); await tick();
+    expect(client.sent[0]).toMatchObject({ cmd: 'preview', what: 'state', name: 'working', texture: 'hush' });
+    expect((client.sent[0] as { voice: { name: string } }).voice.name).toBe('moss');
+    expect(r.lastFrame()).toContain('hear working');
   });
 
-  it('w previews the working state', async () => {
+  it('on the palette, space plays the focused voice and 2 plays its turn.end', async () => {
+    makeProject(cwd);
+    const client = fakeClient(QUIET);
+    const r = mount(client, QUIET);
+    await tick();
+    await keys(r, RIGHT, ' ', '2');
+    expect((client.sent[0] as { voice: { name: string } }).voice.name).toBe('brass');
+    expect(client.sent[1]).toMatchObject({ cmd: 'preview', what: 'event', name: 'turn.end' });
+  });
+});
+
+describe('frame page', () => {
+  it('shows locked while sessions are live and refuses the edit', async () => {
     const client = fakeClient();
     const r = mount(client);
     await tick();
-    r.stdin.write('w');
-    await tick();
-    expect(client.sent[0]).toMatchObject({ cmd: 'preview', what: 'state', name: 'working' });
-    r.unmount();
+    await keys(r, TAB, RIGHT);
+    expect(r.lastFrame()).toMatch(/▸ root/);
+    expect(r.lastFrame()).toContain('locked');
+    r.stdin.write('l'); await tick();
+    expect(r.lastFrame()).toContain('root is locked while 2 sessions are live');
+    expect(client.sent.find((m) => m.cmd === 'frame')).toBeUndefined();
   });
 
-  it('m mutes the highlighted session, M mutes all, + raises the volume', async () => {
-    const client = fakeClient();
-    const r = mount(client);
+  it('with no sessions, a root change saves the user frame and tells the daemon', async () => {
+    const client = fakeClient(QUIET);
+    const r = mount(client, QUIET);
     await tick();
-    r.stdin.write('m');
-    await tick();
-    expect(client.sent[0]).toEqual({ cmd: 'mute', scope: { session: 's1' }, value: true });
-    r.stdin.write('J');
-    await tick();
-    r.stdin.write('m');
-    await tick();
-    expect(client.sent[1]).toEqual({ cmd: 'mute', scope: { session: 's2' }, value: false });
-    r.stdin.write('M');
-    await tick();
-    expect(client.sent[2]).toEqual({ cmd: 'mute', scope: 'all', value: true });
-    r.stdin.write('+');
-    await tick();
-    expect(client.sent[3]).toEqual({ cmd: 'volume', value: 0.85 });
-    r.unmount();
+    await keys(r, TAB, RIGHT);
+    r.stdin.write('l'); await tick();
+    expect(r.lastFrame()).toContain('G#2');
+    expect(readUserConfig().config.frame.root).toBe(44);
+    expect(client.sent.find((m) => m.cmd === 'frame')).toMatchObject({ cmd: 'frame', frame: { root: 44 } });
   });
 
-  it('p pushes the edited voice and texture to the highlighted session', async () => {
+  it('cycles named voicing sets and writes their chords', async () => {
+    const client = fakeClient(QUIET);
+    const r = mount(client, QUIET);
+    await tick();
+    await keys(r, TAB, RIGHT, RIGHT);
+    r.stdin.write('l'); await tick();
+    expect(r.lastFrame()).toContain('‹ dawn ›');
+    expect(readUserConfig().config.frame.voicings).toEqual(VOICING_SETS.dawn);
+  });
+
+  it('volume and mute all go to the daemon, not the config', async () => {
+    const client = fakeClient(QUIET);
+    const r = mount(client, QUIET);
+    await tick();
+    await keys(r, TAB, DOWN, RIGHT);
+    expect(r.lastFrame()).toMatch(/▸ volume/);
+    r.stdin.write('h'); await tick();
+    expect(client.sent.at(-1)).toEqual({ cmd: 'volume', value: 0.75 });
+    await keys(r, RIGHT, 'l');
+    expect(client.sent.at(-1)).toEqual({ cmd: 'mute', scope: 'all', value: true });
+  });
+});
+
+describe('sessions', () => {
+  it('lists live sessions and m mutes the highlighted one', async () => {
     const client = fakeClient();
     const r = mount(client);
     await tick();
-    r.stdin.write('p');
+    expect(r.lastFrame()).toMatch(/01 brass.*alpha.*working.*\[ \]/);
+    expect(r.lastFrame()).toMatch(/02 glass.*beta.*blocked.*\[x\]/);
+    await keys(r, 'J', 'm');
+    expect(client.sent.at(-1)).toEqual({ cmd: 'mute', scope: { session: 's2' }, value: false });
+    r.stdin.write('p'); await tick();
+    expect(client.sent.at(-1)).toMatchObject({ cmd: 'set', session: 's2', texture: 'hush' });
+  });
+
+  it('says so when the daemon is down', async () => {
+    const r = mount(fakeClient(null), null);
     await tick();
-    expect(client.sent[0]).toMatchObject({ cmd: 'set', session: 's1', texture: 'hush' });
-    r.unmount();
+    expect(r.lastFrame()).toContain('daemon unreachable');
   });
 });
 
 describe('saving', () => {
-  it('s outside a project writes the user default voice and texture', async () => {
-    const r = mount(fakeClient());
+  it('s writes tambre.json in a project and the texture goes with it', async () => {
+    makeProject(cwd);
+    fs.writeFileSync(path.join(cwd, 'tambre.json'), JSON.stringify({ voice: 'moss', texture: 'hush', keep: 1 }));
+    const r = mount(fakeClient(QUIET), QUIET);
     await tick();
-    r.stdin.write('\u001B[Z'); // focus texture
-    await tick();
-    r.stdin.write('h'); // hush -> hum
-    await tick();
-    r.stdin.write('s');
-    await tick();
-    expect(r.lastFrame()).toContain('saved as user default');
-    const user = readUserConfig();
-    expect(user.warnings).toEqual([]);
-    expect(user.config.voice).toBe('moss'); // untouched palette voice is saved by name
-    expect(user.config.texture).toBe('hum');
-    r.unmount();
-  });
-
-  it('s inside a project writes tambre.json and records the assignment', async () => {
-    fs.writeFileSync(path.join(cwd, 'tambre.json'), JSON.stringify({ voice: 'cedar', frame: { root: 45 } }));
-    const r = mount(fakeClient());
-    await tick();
-    r.stdin.write('l'); // cedar timbre 0.20 -> 0.25: now a custom voice
-    await tick();
-    r.stdin.write('s');
-    await tick();
+    await keys(r, TAB, 'l'); // texture hush -> next
+    r.stdin.write('s'); await tick();
     expect(r.lastFrame()).toContain('saved');
-    const proj = readProjectConfig(cwd);
-    expect(proj.warnings).toEqual([]);
-    expect(proj.config.frame?.root).toBe(45); // kept
-    expect(proj.config.texture).toBe('hush');
-    expect(proj.config.voice).toMatchObject({ name: 'cedar', timbre: 0.25 });
-    r.unmount();
+    const raw = JSON.parse(fs.readFileSync(path.join(cwd, 'tambre.json'), 'utf8'));
+    expect(raw.keep).toBe(1);
+    expect(raw.voice).toBe('moss');
+    expect(raw.texture).not.toBe('hush');
   });
 
-  it('Enter loads a palette voice; S prompts for a name and saves a patch that then appears in the list', async () => {
-    const r = mount(fakeClient());
+  it('S prompts for a name and saves a patch that then shows on PATCHES', async () => {
+    const r = mount(fakeClient(QUIET), QUIET);
     await tick();
-    r.stdin.write('j'); // moss -> brass
-    await tick();
-    r.stdin.write('\r');
-    await tick();
-    expect(r.lastFrame()).toContain('loaded palette brass');
-    r.stdin.write('S');
-    await tick();
+    r.stdin.write('S'); await tick();
     expect(r.lastFrame()).toContain('patch name:');
-    for (const ch of 'warm') { r.stdin.write(ch); await tick(5); }
-    r.stdin.write('\r');
-    await tick();
+    r.stdin.write('warm'); await tick();
+    r.stdin.write(ENTER); await tick();
     expect(r.lastFrame()).toContain('saved patch "warm"');
-    expect(r.lastFrame()).toContain('warm');
-    const user = readUserConfig();
-    expect(user.warnings).toEqual([]);
-    expect(user.config.patches.warm?.voice).toEqual(voiceByName('brass'));
-    expect(user.config.patches.warm?.texture).toBe('hush');
-    r.unmount();
+    expect(readUserConfig().config.patches.warm?.voice?.name).toBe('moss');
+    await keys(r, TAB, TAB, TAB);
+    expect(r.lastFrame()).toMatch(/▸ warm/);
+  });
+
+  it('outside a project, s saves the user default', async () => {
+    const r = mount(fakeClient(QUIET), QUIET);
+    await tick();
+    r.stdin.write('s'); await tick();
+    expect(r.lastFrame()).toContain('saved as user default');
+    expect(readUserConfig().config.voice).toBe('moss');
+    expect(voiceByName('moss')).toBeTruthy();
   });
 });

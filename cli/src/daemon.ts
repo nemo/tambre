@@ -429,6 +429,21 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
         debug(`set session ${s.id} voice=${s.voice.name} texture=${s.texture}`);
         return { ok: true };
       }
+      case 'frame': {
+        const w: string[] = [];
+        const partial = validatePartialFrame(m.frame, 'frame', w);
+        if (!partial) return { ok: false, error: w[0] ?? 'frame must be an object' };
+        if (engine.frameLocked) {
+          const n = [...sessions.values()].length;
+          return { ok: false, error: `frame is locked while ${n} session${n === 1 ? ' is' : 's are'} live` };
+        }
+        const next = mergeFrame(engine.frame, partial);
+        play(() => engine.setFrame(next));
+        if (!engine.isStarted) engine.setFrame(next);
+        reloadUser();
+        debug(`frame set by control: root ${next.root} bpm ${next.bpm}`);
+        return { ok: true };
+      }
       case 'shutdown':
         setTimeout(() => void shutdown('control'), 0);
         return { ok: true };
