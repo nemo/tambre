@@ -424,8 +424,13 @@ export class Engine {
   async close(): Promise<void> {
     if (this.chordTimer) clearTimeout(this.chordTimer);
     if (!this.started) return;
-    for (const [id] of this.sessions) this.event(id, 'session.end');
-    await new Promise((r) => setTimeout(r, (this.endTail + 0.6) * 1000));
+    // Only wait for the end roll when there are voices left to ring it. The
+    // daemon's idle exit already outlasts the tail of any session that ended
+    // on its own, so this keeps that exit prompt.
+    if (this.sessions.size > 0) {
+      for (const [id] of this.sessions) this.event(id, 'session.end');
+      await new Promise((r) => setTimeout(r, (this.endTail + 0.6) * 1000));
+    }
     await this.ctx.close();
     if (this.recPath) {
       const n = this.recChunks.reduce((a, c) => a + c[0].length, 0);
