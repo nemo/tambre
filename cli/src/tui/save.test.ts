@@ -25,6 +25,17 @@ afterEach(() => {
 });
 
 describe("TUI 's' into a project", () => {
+  it('reports the filename and a left-truncated path, never a right-truncated one', () => {
+    const deep = path.join(cwd, 'a-very-long-directory-name-that-goes-on', 'and-on-and-on', 'until-it-would-not-fit');
+    fs.mkdirSync(deep, { recursive: true });
+    fs.writeFileSync(path.join(deep, 'tambre.json'), '{}');
+    const msg = saveDefault({ voice: voiceByName('tide')!, texture: 'hush' }, deep);
+    expect(msg).toMatch(/^saved tambre\.json · /);
+    expect(msg).toContain('until-it-would-not-fit');
+    expect(msg.length).toBeLessThanOrEqual('saved tambre.json · '.length + 56);
+    expect(msg).toContain('…');
+  });
+
   it('keeps unknown keys and user-authored invalid values in tambre.json', () => {
     fs.writeFileSync(file(), JSON.stringify({ $schema: 'https://x/schema.json', voice: 'tide', frame: { root: 'G2' } }));
     saveDefault({ voice: voiceByName('tide')!, texture: 'hush' }, cwd);

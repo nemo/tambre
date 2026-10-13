@@ -8,8 +8,8 @@ import {
   type Cell, type EditState, type Page, type PickCell,
 } from './model.js';
 import { auditionFor, VOLUME_STEP } from './keys.js';
-import { isFirstRun, listPatches, saveDefault, savePatch, saveTarget, shortHome } from './save.js';
-import { hitTest, layout, renderLines, type Line, type View } from './render.js';
+import { isFirstRun, listPatches, saveDefault, savePatch, saveTarget, shortPath } from './save.js';
+import { hitTest, layout, renderLines, rulerStart, type Line, type View } from './render.js';
 import { looksLikeMouse, parseMouse, type MouseEvent } from './mouse.js';
 
 /** The slice of src/client.ts the TUI needs; tests pass a fake. */
@@ -28,11 +28,6 @@ export interface AppProps {
   cols?: number;
   rows?: number;
 }
-
-const shortPath = (p: string, max: number): string => {
-  const s = shortHome(p);
-  return s.length > max ? '…' + s.slice(s.length - max + 1) : s;
-};
 
 export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs = 1000, cols, rows }: AppProps): React.JSX.Element {
   const { exit } = useApp();
@@ -77,7 +72,7 @@ export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs 
     }
   }, [page, loadedFrom, patches, patchPage]);
 
-  const lay = useMemo(() => layout(width, height, firstRun && page === 'palette'), [width, height, firstRun, page]);
+  const lay = useMemo(() => layout(width, height, firstRun && page === 'palette', daemon === 'down'), [width, height, firstRun, page, daemon]);
 
   // ---- daemon ----
 
@@ -119,7 +114,9 @@ export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs 
       if (cell.frame) {
         if (locked) {
           const n = status?.sessions.length ?? 0;
-          setMessage(`${cell.label} is locked while ${n} session${n === 1 ? ' is' : 's are'} live; it applies once they end`);
+          setEdit(next);
+          try { saveUserConfig({ frame: next.frame }); } catch (e) { setMessage(`could not save frame: ${(e as Error).message}`); return; }
+          setMessage(`${cell.label} locked while ${n} session${n === 1 ? ' is' : 's are'} live · saved to your user config · applies at the next daemon start`);
           return;
         }
         setEdit(next);
@@ -145,6 +142,13 @@ export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs 
     }
   }, [control, locked, status]);
 
+  useEffect(() => {
+    const cell = cells[focused];
+    if (!locked || page !== 'frame' || !cell || cell.kind === 'blank' || cell.kind === 'pick' || !cell.frame) return;
+    const n = status?.sessions.length ?? 0;
+    setMessage(`${cell.label} is locked while ${n} session${n === 1 ? ' is' : 's are'} live · edits save to your user config and apply at the next daemon start`);
+  }, [cells, focused, locked, page, status]);
+
   const nudge = useCallback((dir: -1 | 1) => {
     const cell = cells[focused];
     if (!cell || cell.kind === 'blank' || cell.kind === 'pick') return;
@@ -158,13 +162,14 @@ export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs 
   }, []);
 
   const preview = useCallback((what: 'event' | 'state', name: string) => {
+    if (daemon === 'down') { setMessage('no audio · daemon unreachable'); return; }
     const cell = cells[focused];
     const e = editRef.current;
     // On a pick page the focused voice is the one that plays; elsewhere the edited one.
     const voice = cell?.kind === 'pick' ? cell.voice : e.voice;
     const texture = cell?.kind === 'pick' ? (cell.texture ?? e.texture) : e.texture;
     void control(`hear ${name} · ${voice.name} · ${texture}`, { cmd: 'preview', what, name: name as never, voice, texture });
-  }, [cells, focused, control]);
+  }, [cells, focused, control, daemon]);
 
   const save = useCallback(() => {
     try {
@@ -302,7 +307,7 @@ export function App({ client, cwd = process.cwd(), initialStatus = null, pollMs 
       const h = hitTest(v, l, ev.x, ev.y);
       const f = h?.type === 'cell' && h.index === dragging.current && h.fraction !== undefined
         ? h.fraction
-        : clamp((ev.x - 1 - ((dragging.current % 4) * l.cellWidth + l.rulerIndent) + 0.5) / 12, 0, 1);
+        : clamp((ev.x - 1 - rulerStart(l, dragging.current) + 0.5) / 12, 0, 1);
       applyChange(cell, setFraction(editRef.current, cell, f));
       return;
     }

@@ -47,6 +47,12 @@ export const shortHome = (p: string): string => {
   return home && p.startsWith(home) ? '~' + p.slice(home.length) : p;
 };
 
+/** A path cut from the left to `max` columns, so its tail (the part that identifies it) survives. */
+export const shortPath = (p: string, max: number): string => {
+  const s = shortHome(p);
+  return s.length > max ? '…' + s.slice(s.length - max + 1) : s;
+};
+
 const sameVoice = (a: Voice, b: Voice): boolean =>
   a.timbre === b.timbre && a.register === b.register && a.brightness === b.brightness &&
   a.movement.depth === b.movement.depth && a.movement.rate === b.movement.rate &&
@@ -74,7 +80,7 @@ export function saveDefault(edit: Edit, cwd: string = process.cwd()): string {
   if (target.inProject) {
     updateProjectConfig(target.root, { voice: ref, texture: edit.texture });
     saveUserConfig({ assignments: { [target.root]: typeof ref === 'string' ? ref : null } });
-    return `saved ${shortHome(path.join(target.root, 'tambre.json'))}`;
+    return `saved tambre.json · ${shortPath(target.root, 56)}`;
   }
   saveUserConfig({ voice: ref, texture: edit.texture });
   return 'saved as user default';

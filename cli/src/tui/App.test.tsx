@@ -135,7 +135,9 @@ describe('pages and cells', () => {
     await keys(r, RIGHT, RIGHT, RIGHT);
     expect(r.lastFrame()).toMatch(/▸ bell/);
     r.stdin.write('l'); await tick();
-    expect(r.lastFrame()).toContain('‹ glass ›');
+    expect(r.lastFrame()).toMatch(/bell (glass|wood|soft)\n/);
+    expect(r.lastFrame()).not.toContain('‹ soft ›');
+    expect(r.lastFrame()).toMatch(/‹[━╌]{12}›/);
   });
 });
 
@@ -162,15 +164,18 @@ describe('auditions', () => {
 });
 
 describe('frame page', () => {
-  it('shows locked while sessions are live and refuses the edit', async () => {
+  it('shows locked while sessions are live, explains on focus, and keeps the edit in the user config', async () => {
     const client = fakeClient();
     const r = mount(client);
     await tick();
     await keys(r, TAB, RIGHT);
     expect(r.lastFrame()).toMatch(/▸ root/);
     expect(r.lastFrame()).toContain('locked');
-    r.stdin.write('l'); await tick();
     expect(r.lastFrame()).toContain('root is locked while 2 sessions are live');
+    r.stdin.write('l'); await tick();
+    expect(r.lastFrame()).toContain('root locked while 2 sessions are live · saved to your user config · applies at the next daemon start');
+    expect(r.lastFrame()).toContain('G#2');
+    expect(readUserConfig().config.frame.root).toBe(44);
     expect(client.sent.find((m) => m.cmd === 'frame')).toBeUndefined();
   });
 
@@ -191,7 +196,7 @@ describe('frame page', () => {
     await tick();
     await keys(r, TAB, RIGHT, RIGHT);
     r.stdin.write('l'); await tick();
-    expect(r.lastFrame()).toContain('‹ dawn ›');
+    expect(r.lastFrame()).toContain('voicings dawn');
     expect(readUserConfig().config.frame.voicings).toEqual(VOICING_SETS.dawn);
   });
 
@@ -221,10 +226,14 @@ describe('sessions', () => {
     expect(client.sent.at(-1)).toMatchObject({ cmd: 'set', session: 's2', texture: 'hush' });
   });
 
-  it('says so when the daemon is down', async () => {
-    const r = mount(fakeClient(null), null);
+  it('says so when the daemon is down, and auditions report no audio without sending', async () => {
+    const client = fakeClient(null);
+    const r = mount(client, null);
     await tick();
-    expect(r.lastFrame()).toContain('daemon unreachable');
+    expect(r.lastFrame()).toContain('daemon unreachable · no audio · editing and saving still work');
+    r.stdin.write(' '); await tick();
+    expect(r.lastFrame()).toContain('no audio · daemon unreachable');
+    expect(client.sent.length).toBe(0);
   });
 });
 
@@ -236,7 +245,7 @@ describe('saving', () => {
     await tick();
     await keys(r, TAB, 'l'); // texture hush -> next
     r.stdin.write('s'); await tick();
-    expect(r.lastFrame()).toContain('saved');
+    expect(r.lastFrame()).toContain('saved tambre.json · ');
     const raw = JSON.parse(fs.readFileSync(path.join(cwd, 'tambre.json'), 'utf8'));
     expect(raw.keep).toBe(1);
     expect(raw.voice).toBe('moss');

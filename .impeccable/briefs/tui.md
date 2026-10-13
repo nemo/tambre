@@ -129,8 +129,8 @@ the filter resonance exactly so, and I want to hear every change").
 - Patches: 0 to a few hundred; paged.
 - Project path: truncated from the left to fit.
 - Terminal: designed at 100×30; must work at 80×24 (narrower bars, help line
-  collapses to one row); below 80 columns the grid becomes 1×8 and pages
-  scroll; below 20 rows the transport strip shows one line and `+n`.
+  collapses to one row); below 80 columns each cell becomes one line (marker,
+  label, value, ruler) so eight fit without scrolling; below 20 rows the transport strip shows one line and `+n`.
 - Frame locked while sessions are live; unlocked edits apply at the next
   chord boundary.
 
@@ -163,3 +163,6 @@ the filter resonance exactly so, and I want to hear every change").
      wooden"; glass "high, bright"; reed "reedy, wooden"; tide "low,
      moving"; wire "high, brightest"; felt "pure, darkest").
   4. Whether `PATCHES` also lists the project voice as a cell.
+  Decided at build (2026-10-12): below 80 columns, one-line cells, no
+  scrolling; a locked frame edit is saved to the user config rather than
+  queued, and applies at the next daemon start.

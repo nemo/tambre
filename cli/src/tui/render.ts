@@ -50,6 +50,8 @@ export interface Layout {
   /** 0-based line of the tab row. */
   tabsLine: number;
   noteLines: number;
+  /** 1 when the daemon-unreachable banner is shown under the tab rule. */
+  bannerLines: number;
   gridTop: number;
   gridLines: number;
   transportTop: number;
@@ -65,23 +67,36 @@ export interface Layout {
 export const TRANSPORT_MAX = 8;
 const TRANSPORT_FIXED = 1 + 1 + 1 + 1 + 1 + 1; // header, tabs, rule, rule, rule, status
 
-export function layout(cols: number, rows: number, firstRun: boolean): Layout {
+export function layout(cols: number, rows: number, firstRun: boolean, banner = false): Layout {
   const columns: 4 | 1 = cols >= 80 ? 4 : 1;
   const cellWidth = columns === 4 ? Math.floor(cols / 4) : cols;
   const helpLines = rows >= 26 ? 2 : 1;
   const noteLines = firstRun ? 3 : 0;
+  const bannerLines = banner ? 1 : 0;
   const gridLines = columns === 4 ? 7 : 8;
   const tabsLine = 1;
-  const gridTop = 3 + noteLines;
+  const gridTop = 3 + bannerLines + noteLines;
   const transportTop = gridTop + gridLines + 1;
-  const fixed = TRANSPORT_FIXED + noteLines + gridLines + helpLines;
+  const fixed = TRANSPORT_FIXED + bannerLines + noteLines + gridLines + helpLines;
   const transportLines = Math.max(1, Math.min(TRANSPORT_MAX, rows - fixed));
   const statusLine = transportTop + transportLines + 1;
   return {
-    cols, rows, columns, cellWidth, tabsLine, noteLines, gridTop, gridLines,
+    cols, rows, columns, cellWidth, tabsLine, noteLines, bannerLines, gridTop, gridLines,
     transportTop, transportLines, statusLine, helpLines, rulerIndent: 2, muteCol: 2 + 3 + 9 + 19 + 10,
   };
 }
+
+/** Width of the narrow-mode label column and value column; shared by render and hit-test. */
+const COMPACT_LABEL_W = 12;
+const compactValueW = (cols: number): number => Math.max(8, cols - 2 - COMPACT_LABEL_W - 1 - RULER - 2);
+
+/** 0-based column where cell `index`'s ruler starts, in either column mode. */
+export function rulerStart(l: Layout, index: number): number {
+  if (l.columns === 4) return (index % 4) * l.cellWidth + l.rulerIndent;
+  return 2 + COMPACT_LABEL_W + 1 + compactValueW(l.cols) + 1;
+}
+
+export const BANNER = 'daemon unreachable · no audio · editing and saving still work';
 
 const pad = (s: string, w: number): string => (s.length >= w ? s.slice(0, w) : s + ' '.repeat(w - s.length));
 const rule = (cols: number): Line => [{ text: '─'.repeat(cols), dim: true }];
@@ -89,6 +104,13 @@ const ruler = (f: number): Span[] => {
   const filled = Math.round(f * RULER);
   return [{ text: '━'.repeat(filled) }, { text: '╌'.repeat(RULER - filled), dim: true }];
 };
+/** Position of a cycle cell's value among its options, 0..1. */
+const cycleFraction = (c: Extract<Cell, { kind: 'cycle' }>, v: View): number => {
+  const i = c.options.indexOf(c.get(v.edit));
+  const n = c.options.length;
+  return n > 1 ? Math.max(0, i) / (n - 1) : 0;
+};
+const cycleRuler = (f: number): Span[] => [{ text: '‹', dim: true }, ...ruler(f), { text: '›', dim: true }];
 
 export const TAB_GAP = 2;
 
@@ -142,7 +164,7 @@ function cellLines(v: View, c: Cell, focused: boolean, width: number, locked: bo
   let third: Span[];
   if (c.kind === 'pick') third = [{ text: '  ' + pad(c.sub, inner), dim: true }];
   else if (locked && (c as { frame?: boolean }).frame) third = [{ text: '  ' + pad('locked', inner), dim: true }];
-  else if (c.kind === 'cycle') { const t = c.get(v.edit); third = [{ text: '  ' }, { text: '‹ ', dim: true }, { text: t }, { text: ' ›', dim: true }, { text: ' '.repeat(Math.max(0, inner - 4 - t.length)) }]; }
+  else if (c.kind === 'cycle') third = [{ text: ' ' }, ...cycleRuler(cycleFraction(c, v)), { text: ' '.repeat(Math.max(0, inner - RULER - 1)) }];
   else third = [{ text: '  ' }, ...ruler(fraction(v.edit, c)), { text: ' '.repeat(Math.max(0, inner - RULER)) }];
   return [[mark, label], [value], third];
 }
@@ -151,13 +173,12 @@ function cellLines(v: View, c: Cell, focused: boolean, width: number, locked: bo
 function cellCompact(v: View, c: Cell, focused: boolean, width: number, locked: boolean): Line {
   const mark: Span = focused ? { text: '▸ ', color: 'yellow' } : { text: '  ' };
   if (c.kind === 'blank') return [mark, { text: ' '.repeat(Math.max(0, width - 2)) }];
-  const labelW = 12;
-  const valueW = Math.max(8, width - 2 - labelW - 1 - RULER - 2);
-  const label: Span = { text: pad(c.kind === 'pick' ? c.label + (c.loaded ? ' •' : '') : c.label, labelW), color: focused ? 'yellow' : undefined, dim: !focused };
+  const valueW = compactValueW(width);
+  const label: Span = { text: pad(c.kind === 'pick' ? c.label + (c.loaded ? ' •' : '') : c.label, COMPACT_LABEL_W), color: focused ? 'yellow' : undefined, dim: !focused };
   const value: Span = { text: ' ' + pad(formatValue(v.edit, c), valueW) + ' ', bold: true };
   if (c.kind === 'pick') return [mark, label, value, { text: pad(c.sub, RULER), dim: true }];
   if (locked && (c as { frame?: boolean }).frame) return [mark, label, value, { text: 'locked', dim: true }];
-  if (c.kind === 'cycle') return [mark, label, value, { text: '‹ ›', dim: true }];
+  if (c.kind === 'cycle') return [mark, label, value, ...cycleRuler(cycleFraction(c, v))];
   return [mark, label, value, ...ruler(fraction(v.edit, c))];
 }
 
@@ -172,13 +193,13 @@ function transportLines(v: View, l: Layout): Line[] {
     shown.forEach((s, i) => {
       const hi = i === v.sessionIdx;
       const project = path.basename(s.projectRoot || '') || '?';
-      const mark: Span = hi ? { text: '▸ ', color: 'yellow' } : { text: '  ' };
+      const mark: Span = hi ? { text: '▸ ', bold: true } : { text: '  ' };
       out.push([
         mark,
         { text: `${String(i + 1).padStart(2, '0')} `, dim: true },
         { text: pad(s.voice, 9), bold: hi },
         { text: ' ' + pad(project, 18) },
-        { text: ' ' + pad(s.state, 9), dim: s.state === 'waiting' || s.state === 'ended', color: s.state === 'blocked' ? 'yellow' : undefined },
+        { text: ' ' + pad(s.state, 9), dim: s.state === 'waiting' || s.state === 'ended', bold: s.state === 'blocked' },
         s.muted ? { text: '[x]', color: 'red' } : { text: '[ ]', dim: true },
         { text: '  ' + s.texture, dim: true },
       ]);
@@ -193,12 +214,21 @@ const HELP_ROWS: string[][] = [
   ['tab page', '↑↓←→ cell', 'h/l adjust', 'space hear', '1-6 b i events', 'enter load'],
   ['J/K session', 'm mute', 'p push', 'M mute all', '+/- volume', 's save', 'S patch', '[ ] patches', 'q quit'],
 ];
+/** The one-row help, in priority order; items drop from the end until the row fits. */
+const HELP_ONE_ROW = ['tab page', 'arrows cell', 'h/l adjust', 'space hear', 's save', 'q quit', 'enter load', 'm mute', 'p push'];
+export function helpRows(l: Layout): string[] {
+  if (l.helpLines === 2) return HELP_ROWS.map((r) => r.join('  '));
+  const items = [...HELP_ONE_ROW];
+  while (items.length > 1 && items.join('  ').length > l.cols) items.pop();
+  return [items.join('  ')];
+}
 
 export function renderLines(v: View, l: Layout): Line[] {
   const lines: Line[] = [];
   lines.push(headerLine(v, l.cols));
   lines.push(tabsLine(v));
   lines.push(rule(l.cols));
+  if (l.bannerLines) lines.push([{ text: BANNER, color: 'red' }]);
   if (l.noteLines) for (const n of NOTE) lines.push([{ text: n }]);
 
   const locked = (v.status?.sessions.length ?? 0) > 0;
@@ -229,8 +259,7 @@ export function renderLines(v: View, l: Layout): Line[] {
   } else {
     lines.push([{ text: v.message || ' ' }]);
   }
-  const help = l.helpLines === 2 ? HELP_ROWS : [HELP_ROWS[0].concat(HELP_ROWS[1])];
-  for (const row of help) lines.push([{ text: row.join('  '), dim: true }]);
+  for (const row of helpRows(l)) lines.push([{ text: row, dim: true }]);
   return lines;
 }
 
@@ -259,7 +288,7 @@ export function hitTest(v: View, l: Layout, x: number, y: number): Hit {
       const cell = v.cells[index];
       if (!cell || cell.kind === 'blank') return null;
       if (within === 2 && cell.kind === 'range') {
-        const start = c * l.cellWidth + l.rulerIndent;
+        const start = rulerStart(l, index);
         if (col >= start && col < start + RULER) return { type: 'cell', index, fraction: (col - start + 0.5) / RULER };
       }
       return { type: 'cell', index };
@@ -268,9 +297,7 @@ export function hitTest(v: View, l: Layout, x: number, y: number): Hit {
     const cell = v.cells[index];
     if (!cell || cell.kind === 'blank') return null;
     if (cell.kind === 'range') {
-      const labelW = 12;
-      const valueW = Math.max(8, l.cols - 2 - labelW - 1 - RULER - 2);
-      const start = 2 + labelW + 1 + valueW + 1;
+      const start = rulerStart(l, index);
       if (col >= start && col < start + RULER) return { type: 'cell', index, fraction: (col - start + 0.5) / RULER };
     }
     return { type: 'cell', index };
