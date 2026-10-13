@@ -169,7 +169,9 @@ else your default. The frame is shared by every live session and is set by
 the first one: its project's proposal over your frame if it has one, else
 your frame; it cannot change while any session is live. The project root
 is the nearest ancestor holding `tambre.json`, else the git toplevel, else
-the current directory.
+the current directory. Changes to `tambre.json`, and to your volume or mute
+in `config.json`, apply to live sessions within a second; the frame waits
+for the next session start.
 
 A voice:
 

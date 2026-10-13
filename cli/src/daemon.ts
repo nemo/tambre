@@ -4,9 +4,11 @@ import path from 'node:path';
 import { Engine } from './engine/index.js';
 import { PALETTE, voiceByName } from './palette.js';
 import {
-  loadUserConfig, mergeFrame, resolveSession, resolveVoice, saveUserConfig, validatePartialFrame, validateTexture, validateVoiceRef,
+  loadUserConfig, mergeFrame, projectConfigPath, readProjectConfig, resolveSession, resolveVoice, saveUserConfig, userConfigPath,
+  validatePartialFrame, validateTexture, validateVoiceRef,
   type ResolvedSession, type UserConfig,
 } from './config.js';
+import { ConfigWatcher } from './watch.js';
 import {
   debug, isControlMessage, pidAlive, pidPath, readPidFile, socketPath,
   type Agent, type ControlMessage, type ControlReply, type HookMessage, type SessionStatus, type StatusReply,
@@ -75,6 +77,8 @@ export interface DaemonHandle {
   pid: number;
   /** The engine, for tests that need to look at a voice. */
   engine: Engine;
+  /** Config files the daemon is currently watching for live sessions. */
+  watched(): string[];
   /** Stop listening, end every session, release the device. Idempotent. */
   close(): Promise<void>;
 }
@@ -145,6 +149,8 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
   let previewTimer: NodeJS.Timeout | null = null;
   let pidTimer: NodeJS.Timeout | null = null;
   let closing: Promise<void> | null = null;
+  // Assigned in the hot-reload section below; startSession/endSession close over it.
+  let watcher: ConfigWatcher;
 
   /** Re-read ~/.tambre/config.json so later sessions and previews see edits. */
   const reloadUser = () => {
@@ -177,6 +183,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
       if (previewTimer) clearTimeout(previewTimer);
       if (pidTimer) clearInterval(pidTimer);
       for (const c of conns) c.destroy();
+      watcher.close();
       await new Promise<void>((res) => server.close(() => res()));
       cleanupFiles();
       await engine.close();
@@ -210,6 +217,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     if (!s) return;
     debug(`session ${id} end (${why})`);
     sessions.delete(id);
+    unwatchSession(s);
     s.state = 'ended';
     play(() => engine.event(id, 'session.end'));
     if (sessions.size === 0) {
@@ -217,6 +225,71 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
       armEmptyExit();
     }
   };
+
+  // ---- hot reload ----
+
+  /**
+   * The files a live session's sound is resolved from. Both are watched for
+   * as long as the session lives, so `tambre voice`, a TUI save, or a hand
+   * edit of tambre.json reaches the running daemon instead of waiting for
+   * the next session start.
+   */
+  const sessionFiles = (s: Session): string[] =>
+    s.projectRoot ? [projectConfigPath(s.projectRoot), userConfigPath()] : [userConfigPath()];
+  const watchSession = (s: Session) => { for (const f of sessionFiles(s)) watcher.acquire(f); };
+  const unwatchSession = (s: Session) => { for (const f of sessionFiles(s)) watcher.release(f); };
+
+  /**
+   * The voice a session falls back to when its project stops naming one:
+   * the user default if no other live session has it, else what the session
+   * already plays if that is free, else the first unused palette voice. The
+   * same rules pickVoice applies at start, and stable across repeated runs.
+   */
+  const fallbackVoice = (s: Session, wanted: Voice): Voice => {
+    const others = new Set([...sessions.values()].filter((o) => o.id !== s.id).map((o) => o.voice.name));
+    if (!others.has(wanted.name)) return wanted;
+    if (!others.has(s.voice.name)) return s.voice;
+    return resolveVoice((PALETTE.find((v) => !others.has(v.name)) ?? PALETTE[0]).name);
+  };
+
+  const sameVoice = (a: Voice, b: Voice) => JSON.stringify(a) === JSON.stringify(b);
+
+  /**
+   * Re-resolve every live session from disk and apply what changed. Runs
+   * debounced after any watched file changes. A file that is missing resolves
+   * to defaults (that is the user removing it); a file that is present but
+   * not JSON is someone mid-edit, and leaves the session exactly as it is.
+   * The frame is never hot-reloaded: it is locked while sessions are live, so
+   * a changed proposal is logged and applies at the next first session.
+   */
+  const reconcile = () => {
+    reloadUser();
+    if (user.volume !== engine.volume) { debug(`config: volume ${engine.volume} -> ${user.volume}`); engine.setVolume(user.volume); }
+    if (user.mute !== engine.mute) { debug(`config: mute ${engine.mute} -> ${user.mute}`); engine.setMute(user.mute); }
+    for (const s of sessions.values()) {
+      if (!s.projectRoot) continue;
+      const project = readProjectConfig(s.projectRoot);
+      if (project.error) { debug(`session ${s.id}: ${project.error}; keeping current voice`); continue; }
+      let r: ResolvedSession;
+      try { r = resolveSession(s.cwd || s.projectRoot, { user, root: s.projectRoot }); } catch (e) { debug('resolveSession failed:', String(e)); continue; }
+      for (const w of project.warnings) debug(`session ${s.id}: ${w}`);
+      const voice = r.voiceSource === 'user' ? fallbackVoice(s, r.voice) : r.voice;
+      if (!sameVoice(voice, s.voice)) {
+        debug(`session ${s.id}: voice "${s.voice.name}" -> "${voice.name}" (${r.voiceSource})`);
+        s.voice = voice;
+        play(() => engine.setSessionVoice(s.id, voice));
+      }
+      if (r.texture !== s.texture) {
+        debug(`session ${s.id}: texture ${s.texture} -> ${r.texture}`);
+        s.texture = r.texture;
+        play(() => engine.setSessionTexture(s.id, r.texture));
+      }
+      if (r.frame && JSON.stringify(r.frame) !== JSON.stringify(engine.frame)) {
+        debug(`session ${s.id}: frame proposal changed; ignored while sessions are live (applies at the next first session)`);
+      }
+    }
+  };
+  watcher = new ConfigWatcher(reconcile);
 
   // ---- hook messages ----
 
@@ -266,6 +339,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
       lastPermissionAt: 0,
     };
     sessions.set(s.id, s);
+    watchSession(s);
     debug(`session ${s.id} start as "${s.voice.name}"/${s.texture} pid=${s.pid ?? '?'} root=${s.projectRoot}`);
     play(() => {
       engine.addSession(s.id, s.voice, s.texture);
@@ -520,7 +594,7 @@ export async function runDaemon(opts: DaemonOpts = {}): Promise<DaemonHandle> {
     process.on('uncaughtException', (e) => { debug('uncaught:', e.stack ?? String(e)); cleanupFiles(); process.exit(0); });
   }
 
-  return { socket: sock, pid: process.pid, engine, close: () => shutdown('handle.close') };
+  return { socket: sock, pid: process.pid, engine, watched: () => watcher.watched, close: () => shutdown('handle.close') };
 }
 
 /** True when something accepts connections at `sock` right now. */
