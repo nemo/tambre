@@ -2,6 +2,7 @@ import type { AudioContext, AudioNode, BiquadFilterNode, GainNode, OscillatorNod
 import type { Harmony } from './harmony.js';
 import type { SessionState, Voice } from './types.js';
 import { bell } from './bell.js';
+import { Texture, type TextureMode } from './texture.js';
 
 const GLIDE = 0.06; // time constant; ~0.2 s to settle
 const PAIR_GAIN = 0.11; // per pad pair at full, before the filter
@@ -30,6 +31,8 @@ export class SessionVoice {
   private activityTimer: NodeJS.Timeout | null = null;
   private unsubChord: () => void;
   private stopped = false;
+  private texture: Texture;
+  private lastActivity = -Infinity;
 
   constructor(
     private ctx: AudioContext,
@@ -38,6 +41,7 @@ export class SessionVoice {
     public voice: Voice,
     /** Which rung of the ladder this session sits on. */
     private rung: number,
+    public mode: TextureMode = 'drone',
   ) {
     const now = ctx.currentTime;
 
@@ -67,8 +71,16 @@ export class SessionVoice {
 
     this.pairs.push(this.makePair(0, this.rung));
     this.pairs.push(this.makePair(1, this.rung + 1));
-    this.pairs[0].gain.gain.value = 1;
-    this.pairs[1].gain.gain.value = 0; // second pair rises with activity
+    // drone: pair 0 always up. hum: pair 0 at a whisper. others: pads only swell on demand.
+    this.pairs[0].gain.gain.value = mode === 'drone' ? 1 : mode === 'hum' || mode === 'hush' ? 0.25 : 0;
+    this.pairs[1].gain.gain.value = 0; // second pair rises with activity (drone only)
+    if (mode === 'hum' || mode === 'hush') this.filter.frequency.value = 400;
+    this.texture = new Texture({
+      ctx, out: this.pan, harmony, voice, rung,
+      pad: (level, tc) => this.pairs[0].gain.gain.setTargetAtTime(mode === 'hush' ? Math.max(level, 0.25) : level, this.ctx.currentTime, tc),
+      isWorking: () => this.state === 'working' && !this.stopped,
+      sinceActivity: () => this.ctx.currentTime - this.lastActivity,
+    }, mode);
 
     this.makeTeeth();
 
@@ -147,7 +159,8 @@ export class SessionVoice {
     this.state = 'working';
     this.gain.gain.setTargetAtTime(1, now, 0.3);
     this.teeth.gain.gain.setTargetAtTime(0, now, 0.25);
-    this.filter.frequency.setTargetAtTime(cutoffFor(this.voice.brightness), now, 0.4);
+    if (this.mode === 'drone') this.filter.frequency.setTargetAtTime(cutoffFor(this.voice.brightness), now, 0.4);
+    this.texture.start();
   }
 
   /** A tool ran. Thicken: second pair up, cutoff up, decays after 4 s of quiet. */
@@ -155,6 +168,8 @@ export class SessionVoice {
     if (this.stopped) return;
     if (this.state === 'blocked' || this.state === 'waiting') this.working();
     const now = this.ctx.currentTime;
+    this.lastActivity = now;
+    if (this.mode !== 'drone') return;
     this.pairs[1].gain.gain.setTargetAtTime(1, now, 0.25);
     this.filter.frequency.setTargetAtTime(cutoffFor(Math.min(1, this.voice.brightness + 0.3)), now, 0.3);
     if (this.activityTimer) clearTimeout(this.activityTimer);
@@ -170,6 +185,7 @@ export class SessionVoice {
     if (this.stopped) return;
     const now = this.ctx.currentTime;
     this.state = 'blocked';
+    this.texture.stop();
     this.gain.gain.setTargetAtTime(1, now, 0.3);
     this.teeth.gain.gain.setTargetAtTime(1, now, 0.4);
     this.teeth.filter.frequency.setTargetAtTime(240 + this.voice.brightness * 780, now, 0.5);
@@ -181,6 +197,7 @@ export class SessionVoice {
     if (this.stopped) return;
     const now = this.ctx.currentTime;
     this.state = 'waiting';
+    this.texture.stop();
     this.teeth.gain.gain.setTargetAtTime(0, now, 0.3);
     this.gain.gain.setTargetAtTime(0, now, 0.7);
   }
@@ -190,6 +207,7 @@ export class SessionVoice {
     if (this.stopped) return;
     this.stopped = true;
     this.state = 'ended';
+    this.texture.stop();
     const now = this.ctx.currentTime;
     this.unsubChord();
     if (this.activityTimer) clearTimeout(this.activityTimer);

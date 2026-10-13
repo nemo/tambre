@@ -22,7 +22,7 @@ const HELP = `
 
   Hear what your coding agent is doing.
 
-    tambre demo [--volume 0.8] [--voices moss,brass] [--out demo.wav]   40 s audition
+    tambre demo [--mode drone|breath|pulse|rain|hum|hush|none] [--voices moss,brass] [--out demo.wav]
     tambre daemon                                     run the resident synth (hooks start it for you)
     tambre hook claude-code [--voice <name>]          hook entry point; reads the agent's JSON on stdin
     tambre hooks print claude-code [--command <cmd>]  JSON hooks block for ~/.claude/settings.json
@@ -38,7 +38,7 @@ async function main(): Promise<number> {
       return 0;
     case 'demo': {
       const v = flag('--voices')?.split(',') as [string, string] | undefined;
-      await runDemo({ volume: Number(flag("--volume") ?? 0.8), voices: v, out: flag("--out") });
+      await runDemo({ volume: Number(flag("--volume") ?? 0.8), voices: v, out: flag("--out"), mode: flag("--mode") as never });
       return 0;
     }
     case 'daemon':

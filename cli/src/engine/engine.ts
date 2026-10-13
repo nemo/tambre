@@ -5,6 +5,7 @@ import { Harmony } from './harmony.js';
 import { SessionVoice } from './voice.js';
 import { bell } from './bell.js';
 import { DEFAULT_FRAME, type CanonicalEvent, type Frame, type Voice } from './types.js';
+import type { TextureMode } from './texture.js';
 
 export interface EngineOpts {
   frame?: Frame;
@@ -12,6 +13,8 @@ export interface EngineOpts {
   volume?: number;
   /** Seconds the session.end tail lasts before the voice's graph is dropped. */
   endTail?: number;
+  /** What a working session sounds like. Default 'drone'. */
+  mode?: TextureMode;
 }
 
 /**
@@ -34,6 +37,7 @@ export class Engine {
   private sessions = new Map<string, SessionVoice>();
   private chordTimer: NodeJS.Timeout | null = null;
   private nextRung = 0;
+  readonly mode: TextureMode;
   private frameLocked = false;
   private endTail: number;
   private started = false;
@@ -42,6 +46,7 @@ export class Engine {
     this.ctx = new AudioContext({ latencyHint: 'playback' });
     this.harmony = new Harmony(opts.frame ?? DEFAULT_FRAME);
     this.endTail = opts.endTail ?? 5;
+    this.mode = opts.mode ?? 'drone';
 
     this.comp = this.ctx.createDynamicsCompressor();
     this.comp.threshold.value = -18;
@@ -145,7 +150,7 @@ export class Engine {
     this.chordTimer = setTimeout(() => {
       if (this.sessions.size > 0) {
         this.harmony.advance();
-        this.chordRoll();
+        if (this.mode === 'drone') this.chordRoll();
       }
       this.scheduleChord();
     }, this.harmony.chordSeconds() * 1000);
@@ -167,7 +172,7 @@ export class Engine {
 
   private subTo(level: number, tc = 0.8): void {
     this.sub.gain.gain.setTargetAtTime(level, this.ctx.currentTime, tc);
-    this.chordBed.gain.gain.setTargetAtTime(level > 0 ? 1 : 0, this.ctx.currentTime, tc);
+    this.chordBed.gain.gain.setTargetAtTime(level > 0 && this.mode === 'drone' ? 1 : 0, this.ctx.currentTime, tc);
   }
 
   // ---- sessions ----
@@ -186,9 +191,9 @@ export class Engine {
     this.frameLocked = true;
     const rung = this.nextRung;
     this.nextRung += 2;
-    const sv = new SessionVoice(this.ctx, this.bed, this.harmony, voice, rung);
+    const sv = new SessionVoice(this.ctx, this.bed, this.harmony, voice, rung, this.mode);
     this.sessions.set(id, sv);
-    this.subTo(0.045);
+    this.subTo(this.mode === 'drone' ? 0.045 : this.mode === 'hum' || this.mode === 'hush' ? 0.03 : 0.0001);
     return sv;
   }
 
