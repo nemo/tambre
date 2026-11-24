@@ -2,12 +2,12 @@
 
 Hear what your coding agent is doing.
 
-Tambre is a small CLI you install into a project (or for your user) that gives
-Claude Code, Codex, and friends a sound. A synthesized drone plays while the
-agent works, a held tension layer while it waits on a permission prompt, and a
-bell when a turn ends. Every project gets its own texture in a shared key, so
-with two sessions running you can hear which one is still going and which one
-stopped, without looking at either terminal.
+Tambre is a skill you install into a project (or for your user) that gives a
+coding agent a distinct sound. Pick one of twelve synthesized presets (guitar
+pluck, piano arpeggio, violin rise, snap, clap, and more) per project or per
+user; every preset uses the same synth engine and is normalised to a similar
+loudness, so concurrent sessions never clash. Installable with
+`npx skills add`.
 
 Nothing is pre-recorded. A resident daemon synthesizes everything live from a
 small JSON patch; agent hooks are thin clients that send it events.

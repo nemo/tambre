@@ -6,6 +6,8 @@ import { runHook } from './hook.js';
 import { runDemo } from './demo.js';
 import { hooksBlockFor } from './hooks-print.js';
 import { PALETTE } from './palette.js';
+import { PRESETS, presetByName } from './presets.js';
+import { renderPreset } from './render-preset.js';
 import { TEXTURE_MODES, type TextureMode } from './engine/texture.js';
 import { debug, type Agent } from './ipc.js';
 import { ADAPTERS, adaptersFor, getAdapter } from './adapters/index.js';
@@ -34,28 +36,17 @@ const AGENT_LIST = ADAPTERS.map((a) => a.agent).join('|');
 const HELP = `
   tambre ${version}
 
-  Hear what your coding agent is doing.
+  Give your coding agent a distinct sound.
 
-    tambre                                            open the TUI
-    tambre install [--agent ${AGENT_LIST}|all] [--user | --project] [--voice <name>] [--texture <mode>]
+    tambre install [--agent ${AGENT_LIST}|all] [--user | --project]
     tambre uninstall [--agent ${AGENT_LIST}|all] [--user | --project] [--purge]
-    tambre status [--json]                            live sessions, states, voices, frame
-    tambre mute [--here] / tambre unmute [--here]     everything, or this project's sessions
-    tambre volume <0..1>
-    tambre doctor                                     device, daemon, config, hooks, palette
-    tambre voices                                     the built-in palette and your saved patches
-    tambre show [--json]                              the effective voice, texture, frame, volume here
-    tambre voice <name|json> [--project | --user]     set this project's voice (or your default)
-    tambre texture <mode> [--project | --user]        set this project's texture (or your default)
-    tambre frame [--root G2] [--voicings dusk] [--bpm 60] [--chord-bars 4] [--volume 0.8] [--project]
-    tambre hooks print <agent> [--command <cmd>]      the JSON block install would write
-    tambre demo [--mode ${TEXTURE_MODES.join('|')}] [--voices moss,brass] [--out demo.wav]
-    tambre hook <agent>                               hook entry point; reads the agent's JSON on stdin
-    tambre daemon [--foreground]                      run the resident synth (hooks start it for you);
-                                                      --foreground logs to stderr and never idles out
+    tambre presets                                    list the 12 presets
+    tambre play <preset> [--out file.wav]             render a preset to a WAV
+    tambre preset <name> [--user]                    assign a preset to this project (or your default)
+    tambre doctor                                     check hooks and config
+    tambre hook <agent>                               hook entry point (used by installed hooks)
 
-  --project is the default inside a git repo, --user elsewhere. Textures: ${TEXTURE_MODES.join(', ')}.
-  Set TAMBRE_DEBUG=1 to see daemon and hook logs on stderr.
+  --project is the default inside a git repo, --user elsewhere.
 `;
 
 const scopeFlag = (): InstallScope | undefined => (has('--user') ? 'user' : has('--project') ? 'project' : undefined);
@@ -218,58 +209,36 @@ async function main(): Promise<number> {
       printUninstall(r);
       return r.files.some((f) => f.result === 'skipped') ? 1 : 0;
     }
-    case 'status':
-      return cmdStatus();
-    case 'mute':
-      return cmdMute(true);
-    case 'unmute':
-      return cmdMute(false);
-    case 'volume':
-      return cmdVolume();
     case 'doctor': {
       const checks = await doctor();
       for (const c of checks) out(formatCheck(c) + '\n');
       return checks.some((c) => c.status === 'fail') ? 1 : 0;
     }
-    case 'voices':
-      return cmdVoices();
-    case 'show':
-      return cmdShow(argv, { out, err });
-    case 'voice':
-      return cmdVoice(argv, { out, err });
-    case 'texture':
-      return cmdTexture(argv, { out, err });
-    case 'frame':
-      return cmdFrame(argv, { out, err });
 
-    case 'hooks': {
-      const agent = argv[2];
-      if (argv[1] === 'print' && agent && getAdapter(agent)) {
-        out(JSON.stringify(hooksBlockFor(agent, flag('--command')), null, 2) + '\n');
-        return 0;
-      }
-      err(`usage: tambre hooks print <${AGENT_LIST}> [--command <cmd>]\n`);
-      return 1;
+    case 'presets': {
+      for (const p of PRESETS) out(`${p.name.padEnd(16)} ${p.description}\n`);
+      return 0;
     }
-    case 'demo': {
-      const v = flag('--voices')?.split(',') as [string, string] | undefined;
-      const mode = flag('--mode') as TextureMode | undefined;
-      if (mode && !TEXTURE_MODES.includes(mode)) {
-        err(`unknown --mode "${mode}"; one of ${TEXTURE_MODES.join(', ')}\n`);
-        return 1;
-      }
-      await runDemo({ volume: Number(flag('--volume') ?? 0.8), voices: v, out: flag('--out'), mode });
+    case 'play': {
+      const name = argv[1];
+      const p = name ? presetByName(name) : undefined;
+      if (!p) { err(`unknown preset "${name}"; run tambre presets\n`); return 1; }
+      const outPath = flag('--out') ?? `/tmp/tambre-${p.name}.wav`;
+      await renderPreset(p, outPath);
+      out(`rendered ${outPath}\n`);
+      return 0;
+    }
+    case 'preset': {
+      const name = argv[1];
+      const p = name ? presetByName(name) : undefined;
+      if (!p) { err(`unknown preset "${name}"; run tambre presets\n`); return 1; }
+      const root = findProjectRoot();
+      if (has('--user')) { saveUserConfig({ preset: p.name } as any); out(`set your default preset to ${p.name}\n`); }
+      else { const { saveProjectConfig } = await import('./config.js'); saveProjectConfig(root, { preset: p.name } as any); out(`set this project's preset to ${p.name}\n`); }
       return 0;
     }
 
-    // hook and daemon never print.
-    case 'daemon': {
-      // --foreground: log to stderr and stay up with no sessions, for debugging.
-      const foreground = argv.includes('--foreground');
-      if (foreground) process.env.TAMBRE_DEBUG = process.env.TAMBRE_DEBUG || '1';
-      await runDaemon({ foreground });
-      return 0; // never reached; daemon exits itself
-    }
+    // hook entry point (used by installed hooks; not a user command).
     case 'hook': {
       const agent = argv[1] as Agent | undefined;
       if (!agent) return 0;

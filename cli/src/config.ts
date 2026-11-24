@@ -33,6 +33,7 @@ export interface UserConfig {
   frame: Frame;
   voice: VoiceRef;
   texture: TextureMode;
+  preset?: string;
   volume: number;
   mute: boolean;
   /** absolute project root -> palette voice name */
@@ -50,6 +51,7 @@ export interface ProjectConfig {
   voice?: VoiceRef;
   frame?: Partial<Frame>;
   texture?: TextureMode;
+  preset?: string;
 }
 
 export interface Loaded<T> {
@@ -308,6 +310,10 @@ export function validateUserConfig(raw: unknown, where = 'config.json'): { confi
   c.frame = validateFrame(raw.frame, where, warnings) ?? c.frame;
   c.voice = validateVoiceRef(raw.voice, where, warnings) ?? c.voice;
   c.texture = validateTexture(raw.texture, where, warnings) ?? c.texture;
+  if (raw.preset !== undefined) {
+    if (typeof raw.preset === 'string') c.preset = raw.preset;
+    else warnings.push(`${where}: preset must be a string`);
+  }
   c.volume = validateVolume(raw.volume, where, warnings) ?? c.volume;
   if (raw.mute !== undefined) {
     if (typeof raw.mute === 'boolean') c.mute = raw.mute;
@@ -358,6 +364,10 @@ export function validateProjectConfig(raw: unknown, where = PROJECT_FILE): { con
   if (frame && Object.keys(frame).length) c.frame = frame;
   const texture = validateTexture(raw.texture, where, warnings);
   if (texture) c.texture = texture;
+  if (raw.preset !== undefined) {
+    if (typeof raw.preset === 'string') c.preset = raw.preset;
+    else warnings.push(`${where}: preset must be a string`);
+  }
   return { config: c, warnings };
 }
 

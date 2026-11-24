@@ -17,7 +17,7 @@ describe('shipped skill', () => {
     const md = fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf8');
     expect(md.startsWith('---\nname: tambre\n')).toBe(true);
     expect(md.split('\n').length).toBeLessThanOrEqual(120);
-    for (const cmd of ['tambre mute --here', 'tambre voice brass', 'tambre texture rain', 'tambre frame --root D2 --bpm 56', 'tambre status', 'tambre doctor', 'tambre voices', 'tambre show']) {
+    for (const cmd of ['tambre presets', 'tambre play <preset>', 'tambre preset snap', 'tambre doctor']) {
       expect(md).toContain(cmd);
     }
   });
