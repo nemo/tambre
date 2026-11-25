@@ -116,7 +116,7 @@ export async function doctor(opts: DoctorOpts = {}): Promise<Check[]> {
     if (p.warnings.length) return { name: 'project config', status: 'warn', detail: `${p.path}: ${p.warnings.join('; ')}` };
     if (!p.exists) return { name: 'project config', status: 'ok', detail: `no tambre.json in ${root} (user defaults)` };
     const v = typeof p.config.voice === 'string' ? p.config.voice : p.config.voice?.name ?? 'default';
-    return { name: 'project config', status: 'ok', detail: `${p.path}: voice ${v}${p.config.texture ? `, texture ${p.config.texture}` : ''}${p.config.frame ? ', frame proposal' : ''}` };
+    return { name: 'project config', status: 'ok', detail: `${p.path}: voice ${v}${p.config.preset ? `, preset ${p.config.preset}` : ''}${p.config.texture ? `, texture ${p.config.texture}` : ''}${p.config.frame ? ', frame proposal' : ''}` };
   }));
 
   for (const a of adapters) {

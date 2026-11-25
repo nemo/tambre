@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import type { Readable } from 'node:stream';
 import { debug, type Agent, type HookMessage } from './ipc.js';
 import { connect, spawnDaemon } from './client.js';
@@ -99,7 +99,19 @@ function announce(msg: HookMessage, voiceOverride?: string): void {
     msg.projectRoot = r.projectRoot;
     msg.voiceSpec = voiceOverride ? resolveVoice(voiceOverride) : r.voice;
     msg.texture = r.texture;
+    if (r.preset) msg.preset = r.preset;
     if (r.frame) msg.frame = r.frame;
+    // Play the chosen preset as a one-shot on session start.
+    if (r.preset && msg.event === 'session.start') {
+      try {
+        const home = (process.env.HOME || process.env.USERPROFILE || '');
+        const wav = `${home}/.tambre/presets/${r.preset}.wav`;
+        if (fs.existsSync(wav)) {
+          const c = spawn('afplay', [wav], { detached: true, stdio: 'ignore' });
+          c.unref();
+        }
+      } catch { /* fail silent */ }
+    }
   } catch (e) {
     debug('resolveSession failed:', String(e));
     if (voiceOverride) msg.voice = voiceOverride;

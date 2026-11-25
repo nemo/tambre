@@ -234,8 +234,18 @@ async function main(): Promise<number> {
       const p = name ? presetByName(name) : undefined;
       if (!p) { err(`unknown preset "${name}"; run tambre presets\n`); return 1; }
       const root = findProjectRoot();
+      // Pre-render the preset so hooks can play it without synthesising live.
+      const home = (await import('node:os')).homedir();
+      const dir = (await import('node:path')).join(home, '.tambre', 'presets');
+      (await import('node:fs')).mkdirSync(dir, { recursive: true });
+      const wav = (await import('node:path')).join(dir, `${p.name}.wav`);
+      await renderPreset(p, wav);
       if (has('--user')) { saveUserConfig({ preset: p.name } as any); out(`set your default preset to ${p.name}\n`); }
-      else { const { saveProjectConfig } = await import('./config.js'); saveProjectConfig(root, { preset: p.name } as any); out(`set this project's preset to ${p.name}\n`); }
+      else {
+        const { updateProjectConfig } = await import('./config.js');
+        updateProjectConfig(root, { preset: p.name });
+        out(`set this project's preset to ${p.name}\n`);
+      }
       return 0;
     }
 

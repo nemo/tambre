@@ -21,6 +21,8 @@ export interface HookMessage {
   voiceSpec?: Voice;
   /** What this session sounds like while working. Defaults to the daemon's user default. */
   texture?: TextureMode;
+  /** Preset (one-shot sound) chosen for this session, if any. */
+  preset?: string;
   /** A frame the project proposes; honoured only for the first session. Missing fields come from the user frame. */
   frame?: Partial<Frame>;
   /** The project root the session runs in, for `mute --here` and status. */

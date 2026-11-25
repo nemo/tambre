@@ -69,6 +69,8 @@ export interface ResolvedSession {
   /** Where the voice came from, so a daemon adopting a session knows whether it is project-specific. */
   voiceSource: 'project' | 'assignment' | 'user';
   texture: TextureMode;
+  /** Preset (one-shot sound) chosen for this project/user, if any. */
+  preset?: string;
   /** The project's frame proposal over the user frame, if tambre.json carries one. */
   frame?: Frame;
   projectRoot: string;
@@ -549,6 +551,7 @@ export function resolveSession(cwd: string = process.cwd(), opts: { user?: UserC
     voice: resolveVoice(ref),
     voiceSource,
     texture: project?.texture ?? user.texture,
+    preset: project?.preset ?? user.preset,
     frame: project?.frame ? mergeFrame(user.frame, project.frame) : undefined,
     projectRoot,
   };
