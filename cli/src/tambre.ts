@@ -190,7 +190,8 @@ async function main(): Promise<number> {
       out(version + '\n');
       return 0;
     case undefined:
-      return cmdTui();
+      out(HELP);
+      return 0;
     case '--help': case '-h': case 'help':
       out(HELP);
       return 0;
