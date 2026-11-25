@@ -136,6 +136,21 @@ export function buildHookMessage(agent: Agent, parsed: ParsedHook, opts: { voice
   };
   if (start) announce(msg, opts.voice);
   else if (opts.voice) msg.voice = opts.voice;
+  // Play the chosen preset on turn end / failure too, since the daemon is gone.
+  if (msg.event === 'turn.end' || msg.event === 'turn.fail') {
+    try {
+      const r = resolveSession(msg.cwd);
+      if (r.preset) {
+        msg.preset = r.preset;
+        const home = process.env.HOME || process.env.USERPROFILE || '';
+        const wav = `${home}/.tambre/presets/${r.preset}.wav`;
+        if (fs.existsSync(wav)) {
+          const c = spawn('afplay', [wav], { detached: true, stdio: 'ignore' });
+          c.unref();
+        }
+      }
+    } catch { /* fail silent */ }
+  }
   return msg;
 }
 
