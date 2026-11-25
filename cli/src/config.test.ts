@@ -105,6 +105,11 @@ describe('project overrides user', () => {
     writeProject(project, { voice: 'wire' });
     expect(resolveSession(project).voice.name).toBe('wire');
   });
+
+  it('resolveSession exposes project preset', () => {
+    writeProject(project, { preset: 'piano-arpeggio' });
+    expect(resolveSession(project).preset).toBe('piano-arpeggio');
+  });
 });
 
 describe('resolveVoice', () => {
@@ -303,6 +308,12 @@ describe('updateProjectConfig', () => {
       .toEqual({ $schema: 'x', voice: 'glass', frame: { root: 'G2' }, texture: 'rain' });
     updateProjectConfig(project, { texture: null });
     expect(loadProjectConfig(project)).toEqual({ voice: 'glass' });
+  });
+
+  it('merges preset without dropping other keys', () => {
+    writeProject(project, { voice: 'tide', texture: 'rain' });
+    updateProjectConfig(project, { preset: 'snap' });
+    expect(loadProjectConfig(project)).toEqual({ voice: 'tide', texture: 'rain', preset: 'snap' });
   });
 
   it('refuses a file that is not JSON', () => {
